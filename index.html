@@ -8,14 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <!-- Google Analytics 4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-76PTVR919G"></script>
 <script>
 window.dataLayer=window.dataLayer||[];
 function gtag(){dataLayer.push(arguments);}
 gtag('js',new Date());
-gtag('config','G-XXXXXXXXXX');
-// Replace G-XXXXXXXXXX with your GA4 Measurement ID
-// Get it from: Google Analytics → Admin → Data Streams → Web → Measurement ID
+gtag('config','G-76PTVR919G');
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1020,14 +1018,6 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
     h+=`<button class="btn primary" style="margin-top:12px" onclick="saveSettings()">Save Settings</button>`;
     h+=`<button class="btn outline" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="resetAll()">🗑 Reset all data</button>`;
-
-    // GA4 setup info
-    h+=`<div class="insight info" style="margin-top:20px">
-      <div class="i-title">📊 Google Analytics</div>
-      <div class="i-body">GA4 tracking is built in. To activate, replace <code style="font-family:'DM Mono',monospace;background:rgba(58,123,213,.1);padding:2px 6px;border-radius:4px;font-size:12px">G-XXXXXXXXXX</code> in the HTML file with your GA4 Measurement ID.<br/><br/>
-      <strong>Events tracked:</strong> tab_view, budget_parsed, status_changed, item_added, item_deleted, export_csv, export_clipboard, budget_reused, settings_saved.<br/><br/>
-      <a href="https://analytics.google.com" target="_blank" style="color:var(--blue);font-weight:600">Open Google Analytics →</a></div>
-    </div>`;
 
     // Privacy & Data disclaimer
     h+=`<div class="card" style="padding:16px;margin-top:16px;border:1px solid var(--border)">
