@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Track my Chumz 💰 — Know where your money goes</title>
+<meta name="description" content="Budget accountability tool built for Kenyans. Paste your budget, get instant analysis, catch hidden expenses, lock M-Pesa savings, export to Google Sheets."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('js',new Date());
+gtag('config','G-XXXXXXXXXX');
+// Replace G-XXXXXXXXXX with your GA4 Measurement ID
+// Get it from: Google Analytics → Admin → Data Streams → Web → Measurement ID
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --slate:#1B2838;--off-white:#F7F5F0;--warm-gray:#E8E4DD;
+  --green:#2D9F6F;--green-soft:#D1FAE5;--red:#E8572A;--red-soft:#FEE2E2;
+  --amber:#F5A623;--amber-soft:#FEF3C7;--blue:#3A7BD5;--blue-soft:#DBEAFE;
+  --text:#1F2937;--text-mid:#4B5563;--text-light:#6B7280;
+  --card:#FFFFFF;--border:#E5E7EB;
+}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',system-ui,sans-serif;color:var(--text);background:var(--off-white);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+.shell{max-width:540px;margin:0 auto;min-height:100vh;background:var(--off-white)}
+
+.hdr{background:var(--slate);padding:20px 20px 16px;color:#fff}
+.hdr-row{display:flex;justify-content:space-between;align-items:center}
+.hdr-tag{font-family:'DM Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#9CA3AF}
+.hdr-month{font-size:22px;font-weight:700;margin-top:2px}
+.hdr-stats{display:flex;gap:16px;margin-top:12px;font-size:13px;flex-wrap:wrap}
+.hdr-stats .lb{color:#9CA3AF}
+.hdr-stats .vl{font-weight:600}
+.hdr-stats .vl.neg{color:#EF4444}
+.hdr-stats .vl.pos{color:#4ADE80}
+.prog-track{height:6px;background:#374151;border-radius:3px;overflow:hidden;margin-top:10px}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s}
+.prog-sub{font-size:11px;color:#9CA3AF;margin-top:4px}
+
+.tabs{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);padding:0 2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:0 0 auto;padding:10px 11px;border:none;background:none;font-size:11.5px;font-weight:400;color:var(--text-light);border-bottom:2px solid transparent;cursor:pointer;font-family:inherit;white-space:nowrap}
+.tabs button.on{font-weight:700;color:var(--slate);border-bottom-color:var(--slate)}
+
+.content{padding:16px}
+
+.sec-title{font-size:16px;font-weight:700;color:var(--slate);margin-bottom:4px}
+.sec-sub{font-size:13px;color:var(--text-light);margin-bottom:14px;line-height:1.5}
+.card{background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:8px;border:1px solid var(--border)}
+
+.insight{border-radius:8px;padding:14px 16px;margin-bottom:12px;border-left:4px solid}
+.insight.info{background:#EFF6FF;border-color:var(--blue)}
+.insight.info .i-title{color:#1E40AF}
+.insight.warn{background:#FFF7ED;border-color:var(--red)}
+.insight.warn .i-title{color:#C2410C}
+.insight.ok{background:#ECFDF5;border-color:var(--green)}
+.insight.ok .i-title{color:#166534}
+.insight.tip{background:#FEFCE8;border-color:var(--amber)}
+.insight.tip .i-title{color:#A16207}
+.i-title{font-weight:700;font-size:14px;margin-bottom:6px}
+.i-body{font-size:13px;color:#374151;line-height:1.55}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;border:none;transition:transform .15s;width:100%}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--slate);color:#fff}
+.btn.green{background:var(--green);color:#fff}
+.btn.outline{background:none;border:2px solid var(--border);color:var(--text-mid)}
+.btn.outline:hover{border-color:var(--slate)}
+.btn.sm{padding:8px 14px;font-size:13px;width:auto}
+.btn:disabled{opacity:.4;cursor:default}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+textarea,input[type=text],input[type=number],input[type=date],select{
+  width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;background:#fff
+}
+textarea:focus,input:focus,select:focus{border-color:var(--blue)}
+textarea{resize:vertical;line-height:1.6}
+
+.a-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.a-card{background:var(--card);border-radius:10px;padding:14px;border:1px solid var(--border);text-align:center}
+.a-card .a-num{font-family:'DM Mono',monospace;font-size:20px;font-weight:700;margin-bottom:2px}
+.a-card .a-label{font-size:11px;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px}
+.a-card.danger .a-num{color:var(--red)}
+.a-card.good .a-num{color:var(--green)}
+.a-card.caution .a-num{color:var(--amber)}
+
+.b-table{width:100%;border-collapse:collapse;font-size:13px}
+.b-table th{text-align:left;font-weight:600;color:var(--text-light);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:8px 8px;border-bottom:2px solid var(--border)}
+.b-table td{padding:8px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.b-table tr:last-child td{border-bottom:none}
+.b-table .amt{font-family:'DM Mono',monospace;font-weight:500;text-align:right;white-space:nowrap}
+.b-table .status{text-align:center}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.badge.paid{background:var(--green-soft);color:var(--green)}
+.badge.unpaid{background:var(--red-soft);color:var(--red)}
+.badge.maybe{background:var(--amber-soft);color:#92400E}
+.b-table .del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;padding:2px 4px}
+.b-table .del:hover{color:var(--red)}
+.b-total{font-weight:700;background:#F9FAFB}
+
+.edit-row{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+.edit-row input{flex:1}
+.edit-row select{width:90px;flex:none}
+
+.cal-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-radius:8px;margin-bottom:6px;border:1px solid var(--border)}
+.cal-item .name{flex:1;font-size:13px;font-weight:500}
+.cal-item .amt{font-family:'DM Mono',monospace;font-size:13px;color:var(--red);font-weight:500}
+.cal-link{font-size:12px;color:var(--blue);text-decoration:none;font-weight:600;white-space:nowrap}
+.cal-link:hover{text-decoration:underline}
+
+.leak{background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:8px;border:1px solid var(--border)}
+.leak-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.leak-nm{font-size:14px;font-weight:600;color:var(--slate)}
+.leak-cost{font-family:'DM Mono',monospace;font-size:13px;color:var(--red);font-weight:500}
+.leak-tip{font-size:12px;color:var(--text-mid);line-height:1.5}
+
+.mpesa-card{background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:10px;border:1px solid var(--border)}
+.mpesa-card h3{font-size:14px;font-weight:700;color:var(--slate);margin-bottom:8px}
+.mpesa-step{display:flex;gap:8px;margin-bottom:5px;font-size:13px;color:#374151;line-height:1.4}
+.mpesa-step .n{font-weight:700;color:var(--blue);min-width:18px}
+.mpesa-card code{font-family:'DM Mono',monospace;background:rgba(45,159,111,.15);color:var(--green);padding:2px 6px;border-radius:4px;font-size:12px}
+
+.empty{text-align:center;padding:30px;color:#9CA3AF;font-size:13px}
+
+.footer{text-align:center;padding:24px 16px;font-size:12px;color:var(--text-light)}
+.footer a{color:var(--green);text-decoration:none}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--slate);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+
+@media(max-width:400px){
+  .a-grid{grid-template-columns:1fr}
+  .hdr-stats{gap:10px;font-size:12px}
+  .b-table{font-size:12px}
+  .b-table th,.b-table td{padding:6px 5px}
+}
+</style>
+</head>
+<body>
+
+<div class="shell" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const K = n => `KES ${Math.round(Number(n||0)).toLocaleString()}`;
+const pct = (a,b) => b>0 ? Math.min((a/b)*100,100) : 0;
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const $ = s => document.querySelector(s);
+const now = new Date();
+const curMonth = now.toISOString().slice(0,7);
+const monthLabel = now.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+const dayNum = now.getDate();
+const daysIn = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+const daysLeft = daysIn - dayNum;
+
+function toast(msg){
+  const t=$('#toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// GA4 event tracking
+function track(event,params){
+  try{if(typeof gtag==='function')gtag('event',event,params||{});}catch(e){}
+}
+
+// Profile / personalisation
+function loadProfile(){
+  try{const p=localStorage.getItem('ba4-profile');return p?JSON.parse(p):{};}catch(e){return{};}
+}
+function saveProfile(p){localStorage.setItem('ba4-profile',JSON.stringify(p));}
+function getGreeting(){
+  const p=loadProfile();
+  const h=now.getHours();
+  const name=p.name?`, ${p.name}`:'';
+  if(h<12) return `Good morning${name} ☀️`;
+  if(h<17) return `Good afternoon${name} 👋`;
+  return `Good evening${name} 🌙`;
+}
+
+// ═══════════════════════════════════════
+// PARSER — handles natural budget text
+// ═══════════════════════════════════════
+function parseBudgetText(raw){
+  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  let income=0, balance=null, items=[];
+
+  for(const line of lines){
+    const lo = line.toLowerCase();
+
+    // Skip totals/section headers
+    if(lo.match(/^total[\s=]/) || lo==='expenses' || lo==='budget' || lo.match(/^\d[\d\s\+\=\,\.]+$/)) continue;
+
+    // Balance
+    if(lo.match(/balance|opening|b\/f|brought forward/)){
+      const n = extractNum(line);
+      if(n!==null){
+        // preserve negative if the original line had a negative indicator
+        balance = lo.includes('-') || line.includes('-') ? -Math.abs(n) : n;
+        // Check more carefully: if the negative sign is right before the number
+        const negMatch = line.match(/-\s*[\d,]+/);
+        if(negMatch) balance = -Math.abs(n);
+        else balance = n;
+      }
+      continue;
+    }
+
+    // Income
+    if(lo.match(/income|salary|earnings|pay\b|wages|received/)){
+      const n = extractNum(line);
+      if(n!==null && n>0) income = n;
+      continue;
+    }
+
+    // Expense line
+    const n = extractNum(line);
+    if(n!==null && n!==0){
+      items.push({
+        id: uid(),
+        name: cleanName(line),
+        amount: Math.abs(n),
+        status: getPayStatus(line),
+        original: line
+      });
+    }
+  }
+
+  return {income, balance, items};
+}
+
+function extractNum(line){
+  // "14k" / "14K"
+  const km = line.match(/([\d,.]+)\s*k\b/i);
+  if(km) return parseFloat(km[1].replace(/,/g,''))*1000;
+
+  // find all numbers
+  const nums=[];
+  const re = /-?\s*[\d,]+(?:\.\d+)?/g;
+  let m;
+  while((m=re.exec(line))!==null){
+    const v = parseFloat(m[0].replace(/[\s,]/g,''));
+    if(!isNaN(v) && v!==0) nums.push(v);
+  }
+  if(!nums.length) return null;
+  // largest absolute value is the amount
+  nums.sort((a,b)=>Math.abs(b)-Math.abs(a));
+  return nums[0];
+}
+
+function getPayStatus(line){
+  const l=line.toLowerCase();
+  if(l.includes('?')||l.includes('maybe')||l.includes('tbd')) return 'maybe';
+  if(l.match(/\bpaid\b|\bpd\b|\bdone\b|\bsent\b|\bcleared\b|\bdeducted\b/)) return 'paid';
+  return 'unpaid';
+}
+
+function cleanName(line){
+  return line
+    .replace(/-?\s*[\d,]+(?:\.\d+)?\s*k?\b/gi,'')
+    .replace(/\b(paid|pd|done|sent|cleared|deducted|kes|ksh|tbd|maybe)\b/gi,'')
+    .replace(/[?]/g,'')
+    .replace(/^\s*[-–—:]\s*/,'')
+    .replace(/\s*[-–—:]\s*$/,'')
+    .replace(/\s+/g,' ')
+    .replace(/^[-–—.\s]+|[-–—.\s]+$/g,'')
+    .trim() || 'Unnamed item';
+}
+
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let view = 'input';
+let data = null;
+let showRollover = false;
+
+function load(){
+  try{
+    const raw=localStorage.getItem('ba4');
+    if(raw){
+      data=JSON.parse(raw);
+      if(data.month && data.month!==curMonth){
+        // Archive previous month
+        archiveMonth(data);
+        // Carry forward structure, reset statuses
+        const prev = {...data};
+        data.month = curMonth;
+        data.balance = null;
+        data.rawInput = '';
+        data.items.forEach(i=>{ i.status='unpaid'; i.id=uid(); });
+        save();
+        showRollover = true;
+        view = 'input';
+      } else {
+        if(data.items&&data.items.length>0) view='overview';
+      }
+    }
+  }catch(e){}
+  if(!data) data={month:curMonth,income:0,balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];
+}
+
+function archiveMonth(d){
+  let hist=[];
+  try{ const h=localStorage.getItem('ba4-history'); if(h) hist=JSON.parse(h); }catch(e){}
+  const t=d.items.reduce((s,i)=>s+i.amount,0);
+  const paid=d.items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0);
+  hist.push({
+    month:d.month,
+    income:d.income,
+    balance:d.balance,
+    totalExpenses:t,
+    totalPaid:paid,
+    remaining:d.income-t,
+    itemCount:d.items.length,
+    items:d.items.map(i=>({name:i.name,amount:i.amount,status:i.status})),
+    archivedAt:new Date().toISOString()
+  });
+  // Keep last 12 months
+  if(hist.length>12) hist=hist.slice(-12);
+  localStorage.setItem('ba4-history',JSON.stringify(hist));
+}
+
+function getHistory(){
+  try{ const h=localStorage.getItem('ba4-history'); return h?JSON.parse(h):[]; }catch(e){return[];}
+}
+
+function monthLabel2(m){
+  const [y,mo]=m.split('-');
+  return new Date(y,mo-1).toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+}
+
+function getSuffix(d){
+  d=Number(d);if(!d)return'';
+  if(d>=11&&d<=13)return'th';
+  const s=['th','st','nd','rd'];return(s[d%10]||s[0]);
+}
+
+function save(){localStorage.setItem('ba4',JSON.stringify(data))}
+
+function totals(){
+  const all=data.items.reduce((s,i)=>s+i.amount,0);
+  const paid=data.items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0);
+  const unpaid=data.items.filter(i=>i.status==='unpaid').reduce((s,i)=>s+i.amount,0);
+  const maybe=data.items.filter(i=>i.status==='maybe').reduce((s,i)=>s+i.amount,0);
+  return {all,paid,unpaid,maybe,remaining:data.income-all,stillDue:unpaid+maybe};
+}
+
+
+// ═══════════════════════════════════════
+// ANALYSIS ENGINE — rule-based
+// ═══════════════════════════════════════
+function analyze(){
+  const t=totals(), f=[];
+
+  if(t.all>data.income&&data.income>0){
+    f.push({icon:'🚨',title:'Expenses exceed income',type:'warn',
+      body:`Expenses total ${K(t.all)} against ${K(data.income)} income — a ${K(t.all-data.income)} shortfall. Something has to be cut or you're borrowing from next month.`});
+  } else if(t.remaining>0&&t.remaining<data.income*.1&&data.income>0){
+    f.push({icon:'⚠️',title:'Razor-thin margin',type:'warn',
+      body:`Only ${K(t.remaining)} left (${Math.round((t.remaining/data.income)*100)}% of income). Any surprise expense puts you in the red.`});
+  } else if(t.remaining>0&&data.income>0){
+    f.push({icon:'✅',title:`${K(t.remaining)} remaining`,type:'ok',
+      body:`That's ${Math.round((t.remaining/data.income)*100)}% of income. Allocate it — savings, emergency fund, or a goal. Unallocated money disappears.`});
+  }
+
+  if(data.balance!==null&&data.balance<0){
+    f.push({icon:'🔴',title:`Negative opening balance: ${K(data.balance)}`,type:'warn',
+      body:`You're starting in the red. Address the deficit before budgeting anything discretionary.`});
+  }
+  if(data.balance!==null&&data.balance>0&&t.stillDue>data.balance){
+    f.push({icon:'⚠️',title:'Balance won\'t cover remaining bills',type:'warn',
+      body:`${K(data.balance)} in account but ${K(t.stillDue)} still due — short by ${K(t.stillDue-data.balance)}. Prioritize: rent, utilities, food first.`});
+  }
+
+  if(t.unpaid>0){
+    const ui=data.items.filter(i=>i.status==='unpaid');
+    f.push({icon:'📋',title:`${ui.length} items still unpaid — ${K(t.unpaid)}`,type:'info',
+      body:`Outstanding: ${ui.map(i=>`${i.name} (${K(i.amount)})`).join(', ')}. Set calendar reminders so none slip.`});
+  }
+
+  if(t.maybe>0){
+    const mi=data.items.filter(i=>i.status==='maybe');
+    f.push({icon:'❓',title:`${mi.length} uncertain expenses — ${K(t.maybe)}`,type:'tip',
+      body:`${mi.map(i=>i.name).join(', ')} — decide now. Cut them or commit and mark unpaid.`});
+  }
+
+  if(daysLeft>0&&data.income>0){
+    const disc=Math.max(0,data.income-t.all);
+    const daily=Math.round(disc/daysLeft);
+    if(disc>0){
+      f.push({icon:'📅',title:`Daily discretionary limit: ${K(daily)}`,type:'info',
+        body:`${daysLeft} days left, ${K(disc)} unallocated. Max ${K(daily)}/day on non-budgeted items.`});
+    } else {
+      f.push({icon:'🛑',title:'Zero room for unplanned spending',type:'warn',
+        body:`Every shilling is spoken for. Lock your M-Pesa float to weekly essentials.`});
+    }
+  }
+
+  const big=data.items.filter(i=>data.income>0&&(i.amount/data.income)>.2);
+  if(big.length>0){
+    f.push({icon:'📊',title:'Large line items (>20% of income)',type:'tip',
+      body:`${big.map(i=>`${i.name} = ${Math.round((i.amount/data.income)*100)}%`).join(', ')}. These deserve scrutiny — are they optimized?`});
+  }
+
+  const savKw=/sav|sacco|shares|invest|chama|pension|nssf|lock|mali/i;
+  const savItems=data.items.filter(i=>savKw.test(i.name));
+  if(savItems.length>0){
+    const savT=savItems.reduce((s,i)=>s+i.amount,0);
+    const savP=data.income>0?Math.round((savT/data.income)*100):0;
+    if(savP>=20) f.push({icon:'🎯',title:`Saving ${savP}% of income — strong`,type:'ok',
+      body:`${savItems.map(i=>i.name).join(', ')} = ${K(savT)}. Make sure these are locked or auto-deducted so they're not reversible.`});
+    else if(savP>0) f.push({icon:'💰',title:`Saving ${savP}% — aim for 20%+`,type:'tip',
+      body:`${K(savT)} to savings. Target: ${K(data.income*.2)} (20%). Gap: ${K(data.income*.2-savT)}. Top up via M-Pesa Lock Savings.`});
+  } else if(data.income>0){
+    f.push({icon:'⚠️',title:'No visible savings line',type:'warn',
+      body:`No savings, SACCO, chama, or investment detected. If you're saving elsewhere, add it. If not — fix this first. Start with M-Pesa Lock.`});
+  }
+
+  // Expense concentration
+  if(data.items.length>=5){
+    const sorted=[...data.items].sort((a,b)=>b.amount-a.amount);
+    const top3=sorted.slice(0,3).reduce((s,i)=>s+i.amount,0);
+    const top3pct=Math.round((top3/t.all)*100);
+    if(top3pct>75){
+      f.push({icon:'🔎',title:`Top 3 items = ${top3pct}% of all expenses`,type:'tip',
+        body:`${sorted.slice(0,3).map(i=>i.name).join(', ')} dominate your budget. Small savings here have outsized impact.`});
+    }
+  }
+
+  return f;
+}
+
+
+// ═══════════════════════════════════════
+// GOOGLE CALENDAR & EXPORT
+// ═══════════════════════════════════════
+function calUrl(item,dateStr){
+  const d=dateStr||nextPayday();
+  const s=d.replace(/-/g,'')+'T090000', e=d.replace(/-/g,'')+'T093000';
+  const title=encodeURIComponent(`💰 Pay: ${item.name} — ${K(item.amount)}`);
+  const det=encodeURIComponent(`Track my Chumz reminder\nAmount: ${K(item.amount)}\nStatus: ${item.status}`);
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${s}/${e}&details=${det}`;
+}
+
+function nextPayday(){
+  const y=now.getFullYear(),m=now.getMonth();
+  const target=dayNum>25?new Date(y,m+1,25):new Date(y,m,25);
+  return target.toISOString().slice(0,10);
+}
+
+function remDate(d){const x=new Date(now);x.setDate(x.getDate()+d);return x.toISOString().slice(0,10)}
+
+function exportCSV(){
+  const t=totals();
+  let c='Item,Amount (KES),Status\n';
+  c+=`Income,${data.income},—\n`;
+  if(data.balance!==null) c+=`Opening Balance,${data.balance},—\n`;
+  c+='\n';
+  data.items.forEach(i=>{c+=`"${i.name.replace(/"/g,'""')}",${i.amount},${i.status}\n`});
+  c+=`\nTotal Expenses,${t.all},—\n`;
+  c+=`Total Paid,${t.paid},—\n`;
+  c+=`Total Unpaid,${t.unpaid},—\n`;
+  c+=`Remaining,${t.remaining},—\n`;
+  const blob=new Blob([c],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`chumz-${curMonth}.csv`;a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded — open in Google Sheets');
+  track('export_csv',{items:data.items.length});
+}
+
+function copyTSV(){
+  const t=totals();
+  let tsv='Item\tAmount (KES)\tStatus\n';
+  tsv+=`Income\t${data.income}\t—\n`;
+  if(data.balance!==null) tsv+=`Opening Balance\t${data.balance}\t—\n`;
+  data.items.forEach(i=>{tsv+=`${i.name}\t${i.amount}\t${i.status}\n`});
+  tsv+=`\nTotal Expenses\t${t.all}\t—\n`;
+  tsv+=`Remaining\t${t.remaining}\t—\n`;
+  navigator.clipboard.writeText(tsv).then(()=>{toast('Copied — paste into Google Sheets');track('export_clipboard');});
+}
+
+// ═══════════════════════════════════════
+// HIDDEN COSTS & MPESA DATA
+// ═══════════════════════════════════════
+const LEAKS=[
+  {name:"Daily coffee/tea",mo:4500,tip:"KES 150/day = KES 4,500/month. Brew at home 3 days/week, save KES 2,700."},
+  {name:"Ride-hailing (Bolt/Uber)",mo:6000,tip:"Short rides add up. Batch errands or matatus for routine routes."},
+  {name:"Airtime top-ups",mo:3000,tip:"Small top-ups feel invisible. Switch to a monthly bundle."},
+  {name:"Snacks & fast food",mo:5000,tip:"KES 200/day = KES 5,000/month. Pack snacks from home."},
+  {name:"M-Pesa transaction fees",mo:800,tip:"KES 20-100 per send. Use Till (free) over Send Money. Batch payments."},
+  {name:"Bank charges & ATM fees",mo:500,tip:"ATM + monthly charges = KES 500+. Go cashless where possible."},
+  {name:"Streaming subscriptions",mo:2500,tip:"Netflix + Showmax + Spotify + YouTube Premium? Pick 2, share accounts."},
+  {name:"Unplanned data bundles",mo:2000,tip:"Out-of-bundle data is 4x more expensive. Set a monthly WiFi+data budget."},
+];
+
+const MPESA=[
+  {title:"Lock via M-Pesa App",steps:["Open M-Pesa → Grow → Lock Savings","Set amount & lock period (7 days – 12 months)","Locked funds earn 7–15% interest","You CANNOT withdraw early — that's the point"]},
+  {title:"Set Up Standing Order",steps:["M-Pesa → Grow → Standing Order","Auto-transfer to Lock Savings on payday","Remove the decision — treat it like a bill"]},
+  {title:"Reduce Float Temptation",steps:["After payday, immediately lock target savings","Pay rent/bills to Till numbers same day","Keep only weekly budget on M-Pesa","Reduce Fuliza limit: Dial <code>*234#</code>"]},
+  {title:"The 24-Hour Rule",steps:["Before any unbudgeted spend over KES 1,000","Move the money to Lock Savings first","Wait 24 hours — most urges die overnight"]},
+];
+
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render(){
+  const t=data.items.length>0?totals():null;
+  const hist=getHistory();
+  const tabs=[
+    {id:'input',label:'Budget Input',icon:'✏️'},
+    {id:'overview',label:'Overview',icon:'📊'},
+    {id:'analysis',label:'Analysis',icon:'🧠'},
+    {id:'calendar',label:'Reminders',icon:'📅'},
+    {id:'export',label:'Export',icon:'📤'},
+    {id:'hidden',label:'Hidden Costs',icon:'🔍'},
+    {id:'mpesa',label:'M-Pesa Lock',icon:'🔒'},
+    {id:'history',label:'History',icon:'📁'},
+    {id:'settings',label:'Settings',icon:'⚙️'},
+  ];
+
+  let h='';
+
+  // HEADER
+  const profile=loadProfile();
+  h+=`<div class="hdr">
+    <div class="hdr-row"><div class="hdr-tag">Track my Chumz 💰</div><div style="font-size:11px;color:#9CA3AF">Day ${dayNum}/${daysIn}</div></div>
+    <div class="hdr-month">${getGreeting()}</div>
+    <div style="font-size:13px;color:#9CA3AF;margin-top:2px">${monthLabel}${profile.payday?' · Payday: '+profile.payday+getSuffix(profile.payday):''}</div>`;
+  if(t&&data.income>0){
+    h+=`<div class="hdr-stats">
+      <div><span class="lb">Income</span> <span class="vl">${K(data.income)}</span></div>
+      <div><span class="lb">Expenses</span> <span class="vl ${t.all>data.income?'neg':'pos'}">${K(t.all)}</span></div>
+      <div><span class="lb">Left</span> <span class="vl ${t.remaining<0?'neg':'pos'}">${K(t.remaining)}</span></div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" style="width:${pct(t.all,data.income)}%;background:${t.all>data.income?'#EF4444':t.all>data.income*.85?'#F5A623':'#4ADE80'}"></div></div>
+    <div class="prog-sub">${Math.round(pct(t.all,data.income))}% of income committed · ${daysLeft} days left</div>`;
+  }
+  h+=`</div>`;
+
+  // TABS
+  h+=`<div class="tabs">${tabs.map(tb=>`<button class="${view===tb.id?'on':''}" onclick="go('${tb.id}')">${tb.icon} ${tb.label}</button>`).join('')}</div>`;
+  h+=`<div class="content">`;
+
+
+  // ── INPUT ──
+  if(view==='input'){
+    if(showRollover){
+      h+=`<div class="insight info"><div class="i-title">📅 New month — ${monthLabel}</div><div class="i-body">Last month's budget has been archived to History. Your items have been carried forward with statuses reset to unpaid.<br/><br/>You can:<br/>• <strong>Re-paste</strong> a fresh budget below (replaces everything)<br/>• <strong>Keep the carried-forward items</strong> and adjust in Overview<br/>• <strong>Start blank</strong> if this month is different</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn outline sm" onclick="go('overview')">📊 Use carried-forward items</button>
+        <button class="btn outline sm" onclick="clearForNew()">🗑 Start blank</button>
+        <button class="btn outline sm" onclick="go('history')">📁 View last month</button>
+      </div>`;
+    }
+    h+=`<div class="sec-title">Paste or type your budget</div>
+    <div class="sec-sub">Type it how you'd write it in your notes — income, expenses, balance. Mark things as "paid", "pd", or "?" for uncertain. The parser handles the rest.</div>
+    <textarea id="raw-input" rows="14" placeholder="Example:
+Balance in account 45000
+Income - 120,000
+
+Rent - 35000
+Groceries - 15000
+Transport - 8000
+WiFi - 3000 paid
+Electricity - 2500
+Water - 800
+SACCO - 10,000 paid
+Chama - 5000 paid
+Airtime - 1500 pd
+School fees - 12000
+Savings - 15000
+Gym - 3k?
+Netflix - 1500 paid">${data.rawInput||''}</textarea>
+    <button class="btn primary" style="margin-top:12px" onclick="parseInput()">Parse & Analyze Budget</button>`;
+    if(data.items.length>0){
+      h+=`<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn outline" onclick="go('overview')">View Current Budget →</button>
+      </div>`;
+    }
+  }
+
+
+  // ── OVERVIEW ──
+  if(view==='overview'){
+    if(!t||data.items.length===0){
+      h+=`<div class="empty">No budget data yet.<br/><button class="btn primary sm" style="margin-top:12px" onclick="go('input')">✏️ Enter Budget</button></div>`;
+    } else {
+      h+=`<div class="a-grid">
+        <div class="a-card ${t.remaining<0?'danger':t.remaining<data.income*.1&&data.income>0?'caution':'good'}"><div class="a-num">${K(t.remaining)}</div><div class="a-label">Remaining</div></div>
+        <div class="a-card"><div class="a-num">${K(t.paid)}</div><div class="a-label">Paid</div></div>
+        <div class="a-card ${t.unpaid>0?'danger':'good'}"><div class="a-num">${K(t.unpaid)}</div><div class="a-label">Still Due</div></div>
+        <div class="a-card ${t.maybe>0?'caution':''}"><div class="a-num">${K(t.maybe)}</div><div class="a-label">Uncertain</div></div>
+      </div>`;
+
+      if(data.balance!==null){
+        h+=`<div class="insight ${data.balance<0?'warn':'info'}">
+          <div class="i-title">${data.balance<0?'🔴':'💳'} Opening Balance: ${K(data.balance)}</div>
+          <div class="i-body">${data.balance<0?'Starting in the red. Address the deficit before anything discretionary.':'Account balance at start of budget period.'}</div>
+        </div>`;
+      }
+
+      // Savings goal progress
+      if(profile.savingsGoal && profile.savingsTarget){
+        const savKw=/sav|sacco|shares|invest|chama|pension|nssf|lock|mali/i;
+        const savItems=data.items.filter(i=>savKw.test(i.name));
+        const savTotal=savItems.reduce((s,i)=>s+i.amount,0);
+        const goalHist=getHistory();
+        const histSav=goalHist.reduce((s,m)=>{
+          return s+m.items.filter(i=>savKw.test(i.name)&&i.status==='paid').reduce((a,i)=>a+i.amount,0);
+        },0);
+        const totalSaved=histSav+savTotal;
+        const goalPct=Math.min(Math.round((totalSaved/profile.savingsTarget)*100),100);
+        const goalColor=goalPct>=100?'var(--green)':goalPct>=50?'var(--amber)':'var(--blue)';
+        let timeMsg='';
+        if(profile.savingsDate){
+          const target=new Date(profile.savingsDate);
+          const msLeft=target-now;
+          const daysToGo=Math.ceil(msLeft/(1000*60*60*24));
+          const gap=profile.savingsTarget-totalSaved;
+          if(daysToGo>0&&gap>0){
+            const moLeft=Math.ceil(daysToGo/30);
+            const perMo=Math.round(gap/moLeft);
+            timeMsg=`${daysToGo} days left · Save ${K(perMo)}/month to hit target`;
+          } else if(gap<=0){
+            timeMsg='🎉 Target reached!';
+          }
+        }
+        h+=`<div class="card" style="padding:16px;margin-bottom:10px;border:1px solid ${goalColor}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:700;color:var(--slate)">🎯 ${esc(profile.savingsGoal)}</div>
+            <div style="font-size:12px;font-weight:600;color:${goalColor}">${goalPct}%</div>
+          </div>
+          <div style="height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden;margin-bottom:6px">
+            <div style="height:100%;width:${goalPct}%;background:${goalColor};border-radius:4px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-light)">
+            <span>${K(totalSaved)} saved</span>
+            <span>${K(profile.savingsTarget)} target</span>
+          </div>
+          ${timeMsg?`<div style="font-size:11px;color:var(--text-mid);margin-top:4px">${timeMsg}</div>`:''}
+        </div>`;
+      }
+
+      h+=`<table class="b-table"><thead><tr><th>Item</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th><th></th></tr></thead><tbody>`;
+      data.items.forEach(i=>{
+        h+=`<tr>
+          <td>${esc(i.name)}</td>
+          <td class="amt">${K(i.amount)}</td>
+          <td class="status">
+            <select onchange="setSt('${i.id}',this.value)" style="border:none;background:none;font-size:11px;font-weight:700;cursor:pointer;color:${i.status==='paid'?'var(--green)':i.status==='unpaid'?'var(--red)':'#92400E'}">
+              <option value="paid" ${i.status==='paid'?'selected':''}>✓ Paid</option>
+              <option value="unpaid" ${i.status==='unpaid'?'selected':''}>✗ Unpaid</option>
+              <option value="maybe" ${i.status==='maybe'?'selected':''}>? Maybe</option>
+            </select>
+          </td>
+          <td><button class="del" onclick="delIt('${i.id}')">✕</button></td>
+        </tr>`;
+      });
+      h+=`<tr class="b-total"><td>Total Expenses</td><td class="amt">${K(t.all)}</td><td></td><td></td></tr></tbody></table>`;
+
+      h+=`<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px">Add an item</div>
+        <div class="edit-row">
+          <input type="text" id="add-name" placeholder="Item name"/>
+          <input type="number" id="add-amt" placeholder="Amount" style="width:100px" inputmode="numeric"/>
+          <select id="add-st" style="width:90px"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="maybe">Maybe</option></select>
+          <button class="btn primary sm" onclick="addIt()">+</button>
+        </div>
+      </div>`;
+
+      h+=`<div class="btn-row">
+        <button class="btn outline sm" onclick="go('analysis')">🧠 Analysis</button>
+        <button class="btn outline sm" onclick="go('calendar')">📅 Reminders</button>
+        <button class="btn outline sm" onclick="go('export')">📤 Export</button>
+      </div>`;
+    }
+  }
+
+
+  // ── ANALYSIS ──
+  if(view==='analysis'){
+    if(!t||data.items.length===0){
+      h+=`<div class="empty">Parse your budget first for analysis.<br/><button class="btn primary sm" style="margin-top:12px" onclick="go('input')">✏️ Enter Budget</button></div>`;
+    } else {
+      h+=`<div class="sec-title">Budget Analysis</div><div class="sec-sub">${monthLabel} · Day ${dayNum} of ${daysIn} · ${daysLeft} days remaining</div>`;
+      analyze().forEach(f=>{
+        h+=`<div class="insight ${f.type}"><div class="i-title">${f.icon} ${f.title}</div><div class="i-body">${f.body}</div></div>`;
+      });
+    }
+  }
+
+
+  // ── CALENDAR ──
+  if(view==='calendar'){
+    h+=`<div class="sec-title">Google Calendar Reminders</div><div class="sec-sub">Tap the calendar link to add a payment reminder directly to Google Calendar.</div>`;
+    const unpaid=data.items.filter(i=>i.status==='unpaid');
+    const maybe=data.items.filter(i=>i.status==='maybe');
+
+    if(unpaid.length===0&&maybe.length===0){
+      h+=`<div class="empty">All items are marked paid — nothing to remind you about.</div>`;
+    }
+
+    if(unpaid.length>0){
+      h+=`<div style="font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">Unpaid — ${K(unpaid.reduce((s,i)=>s+i.amount,0))}</div>`;
+      unpaid.forEach((i,idx)=>{
+        h+=`<div class="cal-item"><div class="name">${esc(i.name)}</div><div class="amt">${K(i.amount)}</div><a class="cal-link" href="${calUrl(i,remDate(idx*3+1))}" target="_blank" rel="noopener">📅 Add</a></div>`;
+      });
+    }
+
+    if(maybe.length>0){
+      h+=`<div style="font-size:12px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">Uncertain</div>`;
+      maybe.forEach((i,idx)=>{
+        h+=`<div class="cal-item"><div class="name">${esc(i.name)}</div><div class="amt">${K(i.amount)}</div><a class="cal-link" href="${calUrl(i,remDate(idx*2+2))}" target="_blank" rel="noopener">📅 Add</a></div>`;
+      });
+    }
+
+    h+=`<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Recurring Reminders</div>
+      <div class="cal-item"><div class="name">🔒 Lock M-Pesa Savings</div><div class="amt">Payday</div><a class="cal-link" href="${calUrl({name:'Lock M-Pesa Savings NOW — before you spend',amount:0,status:'unpaid'},nextPayday())}" target="_blank" rel="noopener">📅 Add</a></div>
+      <div class="cal-item"><div class="name">📊 Mid-month budget check</div><div class="amt">Day 15</div><a class="cal-link" href="${calUrl({name:'Open Track my Chumz — mid-month review',amount:0,status:'unpaid'},remDate(Math.max(1,15-dayNum)))}" target="_blank" rel="noopener">📅 Add</a></div>
+      <div class="cal-item"><div class="name">✏️ Enter next month's budget</div><div class="amt">Day 28</div><a class="cal-link" href="${calUrl({name:'Enter next month budget in Track my Chumz',amount:0,status:'unpaid'},remDate(Math.max(1,28-dayNum)))}" target="_blank" rel="noopener">📅 Add</a></div>
+    </div>`;
+  }
+
+
+  // ── EXPORT ──
+  if(view==='export'){
+    h+=`<div class="sec-title">Export to Google Sheets</div><div class="sec-sub">Download as CSV to import into Google Sheets, or copy tab-separated data for a quick paste.</div>`;
+    if(data.items.length===0){
+      h+=`<div class="empty">No budget data to export.</div>`;
+    } else {
+      h+=`<div class="card" style="text-align:center;padding:24px">
+        <div style="font-size:36px;margin-bottom:12px">📊</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Budget — ${monthLabel}</div>
+        <div style="font-size:13px;color:var(--text-light);margin-bottom:16px">${data.items.length} items · ${K(data.income)} income</div>
+        <button class="btn green" onclick="exportCSV()">⬇ Download CSV</button>
+        <button class="btn outline" style="margin-top:8px" onclick="copyTSV()">📋 Copy for Google Sheets</button>
+      </div>
+      <div class="insight info" style="margin-top:12px">
+        <div class="i-title">💡 How to import</div>
+        <div class="i-body"><strong>CSV method:</strong> Open Google Sheets → File → Import → Upload the CSV file.<br/><br/><strong>Quick paste:</strong> Tap "Copy for Google Sheets", open a sheet, click cell A1, paste (Ctrl+V / Cmd+V). Columns align automatically.</div>
+      </div>`;
+    }
+  }
+
+
+  // ── HIDDEN COSTS ──
+  if(view==='hidden'){
+    h+=`<div class="sec-title">Hidden Expense Detector</div><div class="sec-sub">Small recurring costs that drain your budget every month without you noticing.</div>`;
+    LEAKS.forEach(l=>{
+      h+=`<div class="leak"><div class="leak-hd"><span class="leak-nm">${l.name}</span><span class="leak-cost">~${K(l.mo)}/mo</span></div><div class="leak-tip">${l.tip}</div></div>`;
+    });
+    const total=LEAKS.reduce((s,l)=>s+l.mo,0);
+    h+=`<div class="insight warn"><div class="i-title">🧮 Total hidden drain</div><div class="i-body">If all apply: up to <strong>${K(total)}</strong>/month. Even cutting half saves <strong>${K(Math.round(total/2))}</strong> — that's a decent SACCO contribution.</div></div>`;
+  }
+
+
+  // ── MPESA LOCK ──
+  if(view==='mpesa'){
+    h+=`<div class="sec-title">M-Pesa Lock Savings Guide</div><div class="sec-sub">Make your savings physically unavailable. Willpower is a limited resource.</div>`;
+    MPESA.forEach(tip=>{
+      h+=`<div class="mpesa-card"><h3>${tip.title}</h3>`;
+      tip.steps.forEach((s,i)=>{h+=`<div class="mpesa-step"><span class="n">${i+1}.</span><span>${s}</span></div>`});
+      h+=`</div>`;
+    });
+    h+=`<div class="insight ok"><div class="i-title">🔑 The core principle</div><div class="i-body">Lock savings on payday. Reduce Fuliza. Leave only the week's budget on M-Pesa. Make the right choice the <em>only</em> choice.</div></div>`;
+  }
+
+
+  // ── HISTORY ──
+  if(view==='history'){
+    h+=`<div class="sec-title">Budget History</div><div class="sec-sub">Past months are archived automatically. Scroll down for your year-in-review.</div>`;
+
+    if(hist.length===0){
+      h+=`<div class="empty">No history yet. When the month rolls over, your current budget will be archived here automatically.</div>`;
+    } else {
+
+      // ════════════════════════════════════
+      // YEAR-IN-REVIEW SUMMARY
+      // ════════════════════════════════════
+      const years={};
+      hist.forEach(m=>{
+        const y=m.month.split('-')[0];
+        if(!years[y]) years[y]={months:[],totIncome:0,totExpenses:0,totPaid:0,totRemaining:0};
+        years[y].months.push(m);
+        years[y].totIncome+=m.income;
+        years[y].totExpenses+=m.totalExpenses;
+        years[y].totPaid+=m.totalPaid;
+        years[y].totRemaining+=m.remaining;
+      });
+
+      Object.keys(years).sort().reverse().forEach(yr=>{
+        const y=years[yr];
+        const avgExp=Math.round(y.totExpenses/y.months.length);
+        const avgInc=Math.round(y.totIncome/y.months.length);
+        const savRate=y.totIncome>0?Math.round(((y.totIncome-y.totExpenses)/y.totIncome)*100):0;
+        const bestMonth=y.months.reduce((a,b)=>a.remaining>b.remaining?a:b);
+        const worstMonth=y.months.reduce((a,b)=>a.remaining<b.remaining?a:b);
+        const maxBar=Math.max(...y.months.map(m=>m.totalExpenses),1);
+
+        // Detect recurring items across months
+        const itemFreq={};
+        y.months.forEach(m=>{
+          const seen=new Set();
+          m.items.forEach(i=>{
+            const key=i.name.toLowerCase().trim();
+            if(!seen.has(key)){seen.add(key);itemFreq[key]=(itemFreq[key]||{name:i.name,count:0,total:0});itemFreq[key].count++;itemFreq[key].total+=i.amount;}
+          });
+        });
+        const recurring=Object.values(itemFreq).filter(i=>i.count>=Math.max(2,Math.floor(y.months.length*.5))).sort((a,b)=>b.total-a.total);
+
+        h+=`<div class="card" style="margin-bottom:16px;padding:20px;border:2px solid var(--slate)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+            <div style="font-size:20px">📊</div>
+            <div>
+              <div style="font-size:18px;font-weight:700;color:var(--slate)">${yr} Year in Review</div>
+              <div style="font-size:12px;color:var(--text-light)">${y.months.length} month${y.months.length>1?'s':''} tracked</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+            <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--slate)">${K(y.totIncome)}</div>
+              <div style="font-size:11px;color:var(--text-light);margin-top:2px">Total Income</div>
+            </div>
+            <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${y.totExpenses>y.totIncome?'var(--red)':'var(--slate)'}">${K(y.totExpenses)}</div>
+              <div style="font-size:11px;color:var(--text-light);margin-top:2px">Total Expenses</div>
+            </div>
+            <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${savRate>=20?'var(--green)':savRate>=10?'var(--amber)':'var(--red)'}">${savRate}%</div>
+              <div style="font-size:11px;color:var(--text-light);margin-top:2px">Savings Rate</div>
+            </div>
+            <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--slate)">${K(avgExp)}</div>
+              <div style="font-size:11px;color:var(--text-light);margin-top:2px">Avg Monthly Spend</div>
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--slate);margin-bottom:8px">Monthly Expense Trend</div>
+          <div style="margin-bottom:16px">`;
+
+        // Visual bar chart for each month
+        y.months.forEach(m=>{
+          const barW=Math.round((m.totalExpenses/maxBar)*100);
+          const barColor=m.remaining<0?'var(--red)':m.totalExpenses>m.income*.85?'var(--amber)':'var(--green)';
+          const moShort=monthLabel2(m.month).split(' ')[0].slice(0,3);
+          h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:32px;font-size:11px;color:var(--text-light);text-align:right;font-family:'DM Mono',monospace">${moShort}</div>
+            <div style="flex:1;height:14px;background:#F3F4F6;border-radius:3px;overflow:hidden;position:relative">
+              <div style="height:100%;width:${barW}%;background:${barColor};border-radius:3px;transition:width .3s"></div>
+            </div>
+            <div style="width:80px;font-size:11px;color:var(--text-mid);text-align:right;font-family:'DM Mono',monospace">${K(m.totalExpenses)}</div>
+          </div>`;
+        });
+
+        h+=`</div>`;
+
+        // Best & worst months
+        h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+          <div style="background:var(--green-soft);border-radius:8px;padding:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Best Month</div>
+            <div style="font-size:13px;font-weight:600;color:var(--slate);margin-top:4px">${monthLabel2(bestMonth.month)}</div>
+            <div style="font-size:12px;color:var(--text-mid)">${K(bestMonth.remaining)} remaining</div>
+          </div>
+          <div style="background:var(--red-soft);border-radius:8px;padding:10px">
+            <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px">Tightest Month</div>
+            <div style="font-size:13px;font-weight:600;color:var(--slate);margin-top:4px">${monthLabel2(worstMonth.month)}</div>
+            <div style="font-size:12px;color:var(--text-mid)">${K(worstMonth.remaining)} remaining</div>
+          </div>
+        </div>`;
+
+        // Recurring items
+        if(recurring.length>0){
+          h+=`<div style="font-size:12px;font-weight:700;color:var(--slate);margin-bottom:6px">🔁 Recurring Expenses (${Math.floor(y.months.length*.5)}+ months)</div>
+          <table class="b-table" style="font-size:12px;margin-bottom:12px">
+            <thead><tr><th>Item</th><th style="text-align:right">Avg/Month</th><th style="text-align:right">Year Total</th><th style="text-align:center">Months</th></tr></thead><tbody>`;
+          recurring.forEach(r=>{
+            h+=`<tr><td>${esc(r.name)}</td><td class="amt">${K(Math.round(r.total/r.count))}</td><td class="amt">${K(r.total)}</td><td style="text-align:center">${r.count}/${y.months.length}</td></tr>`;
+          });
+          h+=`</tbody></table>`;
+        }
+
+        // Year verdict
+        const verdict = savRate >= 20 ? {icon:'🏆',type:'ok',title:'Strong year',body:`${savRate}% savings rate is excellent. You kept ${K(y.totRemaining)} of your income. Keep this structure locked in.`}
+          : savRate >= 10 ? {icon:'👍',type:'tip',title:'Decent year, room to grow',body:`${savRate}% savings rate is a start, but aim for 20%+. That would mean saving an extra ${K(Math.round((y.totIncome*.2)-(y.totIncome-y.totExpenses)))} across the year.`}
+          : savRate >= 0 ? {icon:'⚠️',type:'warn',title:'Cutting it close',body:`Only ${savRate}% saved. You earned ${K(y.totIncome)} and spent ${K(y.totExpenses)} — just ${K(y.totRemaining)} left. Look at the recurring items above for where to cut.`}
+          : {icon:'🚨',type:'warn',title:'Spent more than earned',body:`You spent ${K(Math.abs(y.totRemaining))} more than you earned. This isn't sustainable. The recurring items above show where the money is going — cut the ones that aren't essential.`};
+
+        h+=`<div class="insight ${verdict.type}"><div class="i-title">${verdict.icon} ${verdict.title}</div><div class="i-body">${verdict.body}</div></div>`;
+        h+=`</div>`; // close year card
+      });
+
+
+      // ════════════════════════════════════
+      // MONTHLY ARCHIVE CARDS
+      // ════════════════════════════════════
+      h+=`<div style="font-size:15px;font-weight:700;color:var(--slate);margin:20px 0 12px">Monthly Archive</div>`;
+
+      [...hist].reverse().forEach(m=>{
+        const pctUsed=m.income>0?Math.round((m.totalExpenses/m.income)*100):0;
+        const color=m.remaining<0?'var(--red)':m.remaining<m.income*.1?'var(--amber)':'var(--green)';
+        h+=`<div class="card" style="margin-bottom:12px;padding:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:15px;font-weight:700;color:var(--slate)">${monthLabel2(m.month)}</div>
+            <div style="font-size:12px;font-weight:600;color:${color}">${m.remaining>=0?'+':''}${K(m.remaining)}</div>
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--text-mid);margin-bottom:10px;flex-wrap:wrap">
+            <div><span style="color:var(--text-light)">Income</span> <strong>${K(m.income)}</strong></div>
+            <div><span style="color:var(--text-light)">Spent</span> <strong>${K(m.totalExpenses)}</strong></div>
+            <div><span style="color:var(--text-light)">Paid</span> <strong>${K(m.totalPaid)}</strong></div>
+            <div><span style="color:var(--text-light)">Items</span> <strong>${m.itemCount}</strong></div>
+          </div>
+          <div style="height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden;margin-bottom:6px">
+            <div style="height:100%;width:${Math.min(pctUsed,100)}%;background:${color};border-radius:3px"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-light)">${pctUsed}% of income used</div>`;
+
+        h+=`<details style="margin-top:10px"><summary style="font-size:12px;color:var(--blue);cursor:pointer;font-weight:600">View ${m.itemCount} items</summary>
+          <table class="b-table" style="margin-top:8px;font-size:12px">
+            <thead><tr><th>Item</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th></tr></thead><tbody>`;
+        m.items.forEach(i=>{
+          h+=`<tr><td>${esc(i.name)}</td><td class="amt">${K(i.amount)}</td>
+            <td style="text-align:center;font-size:11px;font-weight:600;color:${i.status==='paid'?'var(--green)':i.status==='unpaid'?'var(--red)':'#92400E'}">${i.status==='paid'?'✓ Paid':i.status==='unpaid'?'✗ Unpaid':'? Maybe'}</td></tr>`;
+        });
+        h+=`</tbody></table></details>`;
+
+        h+=`<button class="btn outline sm" style="margin-top:10px;font-size:12px" onclick="reuseBudget('${m.month}')">♻️ Reuse this month's structure</button>`;
+        h+=`</div>`;
+      });
+
+      h+=`<button class="btn outline" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="clearHistory()">🗑 Clear all history</button>`;
+    }
+  }
+
+
+  // ── SETTINGS ──
+  if(view==='settings'){
+    const p=loadProfile();
+    h+=`<div class="sec-title">Personalise Track my Chumz</div>`;
+
+    h+=`<div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">Your Details</div>
+      <div style="margin-bottom:10px">
+        <label class="fl">Your name</label>
+        <input class="inp" id="pf-name" type="text" placeholder="e.g. Anne" value="${esc(p.name||'')}"/>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="fl">Payday (day of month)</label>
+        <input class="inp" id="pf-payday" type="number" min="1" max="31" placeholder="e.g. 25" value="${p.payday||''}" inputmode="numeric"/>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="fl">Currency label</label>
+        <select class="inp" id="pf-currency">
+          <option value="KES" ${(p.currency||'KES')==='KES'?'selected':''}>KES (Kenya Shilling)</option>
+          <option value="UGX" ${p.currency==='UGX'?'selected':''}>UGX (Uganda Shilling)</option>
+          <option value="TZS" ${p.currency==='TZS'?'selected':''}>TZS (Tanzania Shilling)</option>
+          <option value="RWF" ${p.currency==='RWF'?'selected':''}>RWF (Rwanda Franc)</option>
+          <option value="USD" ${p.currency==='USD'?'selected':''}>USD (US Dollar)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">Savings Goal</div>
+      <div style="margin-bottom:10px">
+        <label class="fl">What are you saving for?</label>
+        <input class="inp" id="pf-goal" type="text" placeholder="e.g. Emergency fund, trip, car" value="${esc(p.savingsGoal||'')}"/>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="fl">Target amount</label>
+        <input class="inp" id="pf-goal-amt" type="number" placeholder="e.g. 500000" value="${p.savingsTarget||''}" inputmode="numeric"/>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="fl">Target date</label>
+        <input class="inp" id="pf-goal-date" type="date" value="${p.savingsDate||''}"/>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">Hidden Expenses That Apply To You</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:10px">Check the ones relevant to your spending. This personalises your analysis.</div>`;
+
+    const LEAK_IDS=['coffee','rides','airtime','snacks','mpesa_fees','bank_fees','streaming','data'];
+    const LEAK_NAMES=['Daily coffee/tea','Ride-hailing (Bolt/Uber)','Airtime top-ups','Snacks & fast food','M-Pesa fees','Bank/ATM charges','Streaming subscriptions','Unplanned data bundles'];
+    const LEAK_MO=[4500,6000,3000,5000,800,500,2500,2000];
+    const myLeaks=p.myLeaks||[];
+
+    LEAK_IDS.forEach((id,i)=>{
+      h+=`<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" class="pf-leak" value="${id}" ${myLeaks.includes(id)?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"/>
+        <span style="flex:1;font-size:13px">${LEAK_NAMES[i]}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--red)">~${K(LEAK_MO[i])}/mo</span>
+      </label>`;
+    });
+
+    const myTotal=myLeaks.reduce((s,id)=>{const idx=LEAK_IDS.indexOf(id);return s+(idx>=0?LEAK_MO[idx]:0);},0);
+    if(myTotal>0){
+      h+=`<div style="margin-top:10px;font-size:13px;font-weight:600;color:var(--red)">Your estimated hidden drain: ${K(myTotal)}/month (${K(myTotal*12)}/year)</div>`;
+    }
+
+    h+=`</div>`;
+
+    h+=`<button class="btn primary" style="margin-top:12px" onclick="saveSettings()">Save Settings</button>`;
+    h+=`<button class="btn outline" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="resetAll()">🗑 Reset all data</button>`;
+
+    // GA4 setup info
+    h+=`<div class="insight info" style="margin-top:20px">
+      <div class="i-title">📊 Google Analytics</div>
+      <div class="i-body">GA4 tracking is built in. To activate, replace <code style="font-family:'DM Mono',monospace;background:rgba(58,123,213,.1);padding:2px 6px;border-radius:4px;font-size:12px">G-XXXXXXXXXX</code> in the HTML file with your GA4 Measurement ID.<br/><br/>
+      <strong>Events tracked:</strong> tab_view, budget_parsed, status_changed, item_added, item_deleted, export_csv, export_clipboard, budget_reused, settings_saved.<br/><br/>
+      <a href="https://analytics.google.com" target="_blank" style="color:var(--blue);font-weight:600">Open Google Analytics →</a></div>
+    </div>`;
+  }
+
+  h+=`</div>`;
+  h+=`<div class="footer">Built by <a href="https://wakaratech.com" target="_blank">Wakara Technologies</a> · Nairobi</div>`;
+
+  $('#app').innerHTML=h;
+  if(view==='input'){const ta=$('#raw-input');if(ta&&!data.rawInput)ta.focus();}
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ── ACTIONS ──
+window.go=function(v){view=v;render();window.scrollTo(0,0);track('tab_view',{tab:v});};
+
+window.parseInput=function(){
+  const raw=$('#raw-input').value.trim();
+  if(!raw){toast('Type or paste your budget first');return}
+  const p=parseBudgetText(raw);
+  data.rawInput=raw;
+  data.income=p.income||data.income;
+  data.balance=p.balance;
+  data.items=p.items;
+  data.month=curMonth;
+  showRollover=false;
+  save();
+  view='overview';
+  render();
+  toast(`Parsed ${p.items.length} items`);
+  track('budget_parsed',{item_count:p.items.length,has_income:p.income>0,has_balance:p.balance!==null});
+};
+
+window.setSt=function(id,st){
+  const i=data.items.find(x=>x.id===id);
+  if(i){i.status=st;save();render();track('status_changed',{status:st});}
+};
+
+window.delIt=function(id){data.items=data.items.filter(i=>i.id!==id);save();render();track('item_deleted');};
+
+window.addIt=function(){
+  const name=$('#add-name').value.trim();
+  const amt=Number($('#add-amt').value);
+  const st=$('#add-st').value;
+  if(!name||!amt){toast('Enter name and amount');return}
+  data.items.push({id:uid(),name,amount:Math.abs(amt),status:st});
+  save();render();toast(`Added ${name}`);track('item_added');
+};
+
+window.resetAll=function(){
+  if(confirm('Clear all budget data? This cannot be undone.')){
+    localStorage.removeItem('ba4');
+    data={month:curMonth,income:0,balance:null,items:[],rawInput:''};
+    view='input';render();toast('Reset complete');
+  }
+};
+
+window.clearForNew=function(){
+  data.items=[];data.rawInput='';data.balance=null;
+  showRollover=false;save();render();
+  toast('Cleared — start fresh');
+};
+
+window.reuseBudget=function(month){
+  const hist=getHistory();
+  const m=hist.find(h=>h.month===month);
+  if(!m){toast('Month not found');return}
+  data.items=m.items.map(i=>({id:uid(),name:i.name,amount:i.amount,status:'unpaid'}));
+  data.income=m.income;
+  data.balance=null;
+  data.rawInput='';
+  data.month=curMonth;
+  showRollover=false;
+  save();view='overview';render();
+  toast(`Loaded ${m.items.length} items from ${monthLabel2(month)}`);
+  track('budget_reused',{source_month:month,items:m.items.length});
+};
+
+window.clearHistory=function(){
+  if(confirm('Delete all archived months? This cannot be undone.')){
+    localStorage.removeItem('ba4-history');
+    render();toast('History cleared');
+  }
+};
+
+window.saveSettings=function(){
+  const leaks=[];
+  document.querySelectorAll('.pf-leak:checked').forEach(el=>leaks.push(el.value));
+  const p={
+    name:($('#pf-name')?.value||'').trim(),
+    payday:Number($('#pf-payday')?.value)||null,
+    currency:$('#pf-currency')?.value||'KES',
+    savingsGoal:($('#pf-goal')?.value||'').trim(),
+    savingsTarget:Number($('#pf-goal-amt')?.value)||null,
+    savingsDate:$('#pf-goal-date')?.value||null,
+    myLeaks:leaks,
+  };
+  saveProfile(p);
+  toast('Settings saved');
+  track('settings_saved',{has_name:!!p.name,has_goal:!!p.savingsGoal,leaks_count:leaks.length});
+  render();
+};
+
+// ── INIT ──
+load();
+render();
+</script>
+</body>
+</html>
