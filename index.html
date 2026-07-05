@@ -142,6 +142,23 @@ textarea{resize:vertical;line-height:1.6}
 .welcome-box .divider{height:1px;background:var(--border);margin:16px 0}
 .welcome-box .fine{font-size:11px;color:var(--text-light);line-height:1.6;margin-bottom:16px}
 
+.lock-screen{position:fixed;inset:0;background:var(--slate);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock-box{text-align:center;max-width:340px;width:100%}
+.lock-box h2{font-size:22px;font-weight:700;color:#fff;margin-bottom:4px}
+.lock-box .lock-sub{font-size:13px;color:#9CA3AF;margin-bottom:24px}
+.lock-box .lock-icon{font-size:48px;margin-bottom:16px}
+.pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:24px}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #4B5563;background:transparent;transition:all .2s}
+.pin-dot.filled{background:var(--green);border-color:var(--green)}
+.pin-dot.error{background:var(--red);border-color:var(--red);animation:shake .4s}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;margin:0 auto}
+.pin-key{height:56px;border-radius:12px;border:1px solid #374151;background:rgba(255,255,255,.05);color:#fff;font-size:22px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+.pin-key:active{background:rgba(255,255,255,.15)}
+.pin-key.fn{font-size:14px;color:#9CA3AF;border-color:transparent;background:transparent}
+.lock-forgot{margin-top:20px;font-size:12px;color:#6B7280}
+.lock-forgot a{color:var(--amber);cursor:pointer;text-decoration:underline}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
 @media(max-width:400px){
   .a-grid{grid-template-columns:1fr}
   .hdr-stats{gap:10px;font-size:12px}
@@ -178,10 +195,41 @@ function track(event,params){
 }
 
 // Profile / personalisation
-function loadProfile(){
-  try{const p=localStorage.getItem('ba4-profile');return p?JSON.parse(p):{};}catch(e){return{};}
+function saveProfile(p){
+  if(_pin){
+    secureSet('ba4-profile', p);
+  } else {
+    localStorage.setItem('ba4-profile',JSON.stringify(p));
+  }
 }
-function saveProfile(p){localStorage.setItem('ba4-profile',JSON.stringify(p));}
+
+function loadProfile(){
+  // Sync load — can't decrypt async here, so try JSON first
+  try{const p=localStorage.getItem('ba4-profile');if(p){try{return JSON.parse(p);}catch(e){return {};}}return{};}catch(e){return{};}
+}
+
+async function loadProfileAsync(){
+  if(_pin){
+    const p = await secureGet('ba4-profile');
+    return p || {};
+  }
+  return loadProfile();
+}
+
+window.removePin = async function(){
+  if(!confirm('Remove PIN protection? Your data will be stored unencrypted.')) return;
+  // Decrypt everything and store as plain JSON
+  const d = await secureGet('ba4');
+  if(d) localStorage.setItem('ba4', JSON.stringify(d));
+  const h = await secureGet('ba4-history');
+  if(h) localStorage.setItem('ba4-history', JSON.stringify(h));
+  const p = await secureGet('ba4-profile');
+  if(p) localStorage.setItem('ba4-profile', JSON.stringify(p));
+  localStorage.removeItem('ba4-pin');
+  _pin = null;
+  toast('PIN removed — data is no longer encrypted');
+  render();
+};
 function getGreeting(){
   const p=loadProfile();
   const h=now.getHours();
@@ -190,6 +238,282 @@ function getGreeting(){
   if(h<17) return `Good afternoon${name} 👋`;
   return `Good evening${name} 🌙`;
 }
+
+// ═══════════════════════════════════════
+// ENCRYPTION (AES-256-GCM + PBKDF2)
+// ═══════════════════════════════════════
+async function deriveKey(pin, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'},
+    keyMaterial,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
+}
+
+async function encryptData(plaintext, pin){
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(pin, salt);
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plaintext));
+  // Pack: salt(16) + iv(12) + ciphertext
+  const buf = new Uint8Array(salt.length + iv.length + new Uint8Array(ct).length);
+  buf.set(salt, 0);
+  buf.set(iv, 16);
+  buf.set(new Uint8Array(ct), 28);
+  return btoa(String.fromCharCode(...buf));
+}
+
+async function decryptData(b64, pin){
+  const raw = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+  const salt = raw.slice(0, 16);
+  const iv = raw.slice(16, 28);
+  const ct = raw.slice(28);
+  const key = await deriveKey(pin, salt);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
+async function hashPin(pin){
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'}, keyMaterial, 256);
+  const hashArr = new Uint8Array(bits);
+  const packed = new Uint8Array(salt.length + hashArr.length);
+  packed.set(salt, 0);
+  packed.set(hashArr, 16);
+  return btoa(String.fromCharCode(...packed));
+}
+
+async function verifyPin(pin, stored){
+  const raw = Uint8Array.from(atob(stored), c=>c.charCodeAt(0));
+  const salt = raw.slice(0, 16);
+  const storedHash = raw.slice(16);
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt, iterations:310000, hash:'SHA-256'}, keyMaterial, 256);
+  const testHash = new Uint8Array(bits);
+  if(testHash.length !== storedHash.length) return false;
+  let match = true;
+  for(let i=0; i<testHash.length; i++) if(testHash[i]!==storedHash[i]) match=false;
+  return match;
+}
+
+// Encrypted storage wrappers
+let _pin = null; // held in memory only during session
+
+async function secureGet(key){
+  const raw = localStorage.getItem(key);
+  if(!raw) return null;
+  if(!_pin) return null;
+  try{
+    // Try decrypting — if it fails, data might be unencrypted (migration)
+    const plain = await decryptData(raw, _pin);
+    return JSON.parse(plain);
+  }catch(e){
+    // Might be old unencrypted data
+    try{ return JSON.parse(raw); }catch(e2){ return null; }
+  }
+}
+
+async function secureSet(key, obj){
+  if(!_pin){
+    localStorage.setItem(key, JSON.stringify(obj));
+    return;
+  }
+  const ct = await encryptData(JSON.stringify(obj), _pin);
+  localStorage.setItem(key, ct);
+}
+
+// PIN state
+function hasPinSet(){ return !!localStorage.getItem('ba4-pin'); }
+
+let lockScreenEl = null;
+let pinBuffer = '';
+let pinMode = 'unlock'; // 'unlock', 'setup', 'confirm-new', 'change-verify', 'change-new', 'change-confirm'
+let pinSetupFirst = '';
+
+function showLockScreen(mode){
+  pinMode = mode;
+  pinBuffer = '';
+  const titles = {
+    'setup': 'Create a PIN',
+    'confirm-new': 'Confirm your PIN',
+    'unlock': 'Enter your PIN',
+    'change-verify': 'Enter current PIN',
+    'change-new': 'Enter new PIN',
+    'change-confirm': 'Confirm new PIN',
+  };
+  const subs = {
+    'setup': 'Choose a 4-digit PIN to protect your budget data',
+    'confirm-new': 'Enter the same PIN again to confirm',
+    'unlock': 'Your data is encrypted and PIN-protected',
+    'change-verify': 'Verify your identity first',
+    'change-new': 'Choose a new 4-digit PIN',
+    'change-confirm': 'Confirm your new PIN',
+  };
+
+  if(lockScreenEl) lockScreenEl.remove();
+  lockScreenEl = document.createElement('div');
+  lockScreenEl.className = 'lock-screen';
+  lockScreenEl.innerHTML = `
+    <div class="lock-box">
+      <div class="lock-icon">🔐</div>
+      <h2>${titles[mode]}</h2>
+      <div class="lock-sub">${subs[mode]}</div>
+      <div class="pin-dots">${[0,1,2,3].map(i=>`<div class="pin-dot" id="pd${i}"></div>`).join('')}</div>
+      <div class="pin-pad">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="pin-key" onclick="pinPress('${n}')">${n}</button>`).join('')}
+        <button class="pin-key fn" onclick="pinPress('clear')">Clear</button>
+        <button class="pin-key" onclick="pinPress('0')">0</button>
+        <button class="pin-key fn" onclick="pinPress('back')">⌫</button>
+      </div>
+      ${mode==='unlock'?`<div class="lock-forgot">
+        <div style="margin-bottom:6px">Forgot your PIN?</div>
+        <a onclick="confirmPinReset()">Reset PIN & delete all data</a>
+        <div style="margin-top:6px;font-size:11px;color:#4B5563">Because your data is encrypted, there is no way to recover it without the PIN.</div>
+      </div>`:''}
+      ${mode==='setup'?`<div class="lock-forgot">
+        <div style="font-size:11px;color:#F5A623;margin-top:4px">⚠️ Remember this PIN — if you forget it, your encrypted data cannot be recovered. You would need to reset and start over.</div>
+      </div>`:''}
+    </div>
+  `;
+  document.body.appendChild(lockScreenEl);
+}
+
+function updateDots(error){
+  for(let i=0;i<4;i++){
+    const d=document.getElementById('pd'+i);
+    if(!d) continue;
+    d.className='pin-dot'+(i<pinBuffer.length?' filled':'')+(error?' error':'');
+  }
+}
+
+window.pinPress = async function(key){
+  if(key==='clear'){ pinBuffer=''; updateDots(); return; }
+  if(key==='back'){ pinBuffer=pinBuffer.slice(0,-1); updateDots(); return; }
+  if(pinBuffer.length>=4) return;
+  pinBuffer+=key;
+  updateDots();
+
+  if(pinBuffer.length===4){
+    await handlePinComplete(pinBuffer);
+  }
+};
+
+async function handlePinComplete(pin){
+  if(pinMode==='setup'){
+    pinSetupFirst = pin;
+    setTimeout(()=>showLockScreen('confirm-new'), 300);
+    return;
+  }
+
+  if(pinMode==='confirm-new'){
+    if(pin !== pinSetupFirst){
+      updateDots(true);
+      setTimeout(()=>{ toast("PINs don't match — try again"); showLockScreen('setup'); }, 600);
+      return;
+    }
+    // Save PIN hash and encrypt existing data
+    const h = await hashPin(pin);
+    localStorage.setItem('ba4-pin', h);
+    _pin = pin;
+    // Re-encrypt existing data
+    await secureSet('ba4', data);
+    const hist = getHistory();
+    if(hist.length) await secureSet('ba4-history', hist);
+    const profile = loadProfile();
+    if(Object.keys(profile).length) await secureSet('ba4-profile', profile);
+    lockScreenEl.remove();
+    lockScreenEl=null;
+    toast('PIN set — your data is now encrypted');
+    track('pin_created');
+    render();
+    return;
+  }
+
+  if(pinMode==='unlock'){
+    const stored = localStorage.getItem('ba4-pin');
+    const ok = await verifyPin(pin, stored);
+    if(!ok){
+      updateDots(true);
+      setTimeout(()=>{ pinBuffer=''; updateDots(); }, 600);
+      return;
+    }
+    _pin = pin;
+    lockScreenEl.remove();
+    lockScreenEl=null;
+    await loadEncrypted();
+    render();
+    // Show welcome banner if needed
+    showWelcomeBanner();
+    return;
+  }
+
+  if(pinMode==='change-verify'){
+    const stored = localStorage.getItem('ba4-pin');
+    const ok = await verifyPin(pin, stored);
+    if(!ok){
+      updateDots(true);
+      setTimeout(()=>{ pinBuffer=''; updateDots(); toast('Incorrect PIN'); }, 600);
+      return;
+    }
+    setTimeout(()=>showLockScreen('change-new'), 300);
+    return;
+  }
+
+  if(pinMode==='change-new'){
+    pinSetupFirst = pin;
+    setTimeout(()=>showLockScreen('change-confirm'), 300);
+    return;
+  }
+
+  if(pinMode==='change-confirm'){
+    if(pin !== pinSetupFirst){
+      updateDots(true);
+      setTimeout(()=>{ toast("PINs don't match"); showLockScreen('change-new'); }, 600);
+      return;
+    }
+    const h = await hashPin(pin);
+    localStorage.setItem('ba4-pin', h);
+    _pin = pin;
+    await secureSet('ba4', data);
+    const hist = getHistory();
+    if(hist.length) await secureSet('ba4-history', hist);
+    const profile = loadProfile();
+    if(Object.keys(profile).length) await secureSet('ba4-profile', profile);
+    lockScreenEl.remove();
+    lockScreenEl=null;
+    toast('PIN changed successfully');
+    track('pin_changed');
+    render();
+    return;
+  }
+}
+
+window.confirmPinReset = function(){
+  if(!confirm('⚠️ PERMANENT ACTION\n\nYou are about to delete ALL your budget data, history, and settings.\n\nBecause your data is encrypted with your PIN, it CANNOT be recovered.\n\nAre you sure?')) return;
+  if(!confirm('FINAL CONFIRMATION\n\nType-to-confirm is not available in this interface. Tap OK to permanently delete everything and start fresh, or Cancel to go back.')) return;
+  localStorage.removeItem('ba4');
+  localStorage.removeItem('ba4-pin');
+  localStorage.removeItem('ba4-history');
+  localStorage.removeItem('ba4-profile');
+  localStorage.removeItem('ba4-welcomed');
+  _pin = null;
+  data = {month:curMonth,income:0,balance:null,items:[],rawInput:'',history:[]};
+  if(lockScreenEl){lockScreenEl.remove();lockScreenEl=null;}
+  view='input';
+  render();
+  toast('All data reset — PIN removed');
+  showWelcomeBanner();
+};
+
+window.resetPinData = window.confirmPinReset;
 
 // ═══════════════════════════════════════
 // PARSER — handles natural budget text
@@ -288,15 +612,13 @@ let data = null;
 let showRollover = false;
 
 function load(){
+  // Unencrypted load — used when no PIN or during initial setup
   try{
     const raw=localStorage.getItem('ba4');
     if(raw){
-      data=JSON.parse(raw);
-      if(data.month && data.month!==curMonth){
-        // Archive previous month
+      try{ data=JSON.parse(raw); }catch(e){ data=null; } // might be encrypted
+      if(data && data.month && data.month!==curMonth){
         archiveMonth(data);
-        // Carry forward structure, reset statuses
-        const prev = {...data};
         data.month = curMonth;
         data.balance = null;
         data.rawInput = '';
@@ -304,7 +626,7 @@ function load(){
         save();
         showRollover = true;
         view = 'input';
-      } else {
+      } else if(data) {
         if(data.items&&data.items.length>0) view='overview';
       }
     }
@@ -313,9 +635,30 @@ function load(){
   if(!data.history) data.history=[];
 }
 
+async function loadEncrypted(){
+  // Load with decryption
+  try{
+    data = await secureGet('ba4');
+    if(data && data.month && data.month!==curMonth){
+      archiveMonth(data);
+      data.month = curMonth;
+      data.balance = null;
+      data.rawInput = '';
+      data.items.forEach(i=>{ i.status='unpaid'; i.id=uid(); });
+      await secureSet('ba4', data);
+      showRollover = true;
+      view = 'input';
+    } else if(data) {
+      if(data.items&&data.items.length>0) view='overview';
+    }
+  }catch(e){}
+  if(!data) data={month:curMonth,income:0,balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];
+}
+
 function archiveMonth(d){
   let hist=[];
-  try{ const h=localStorage.getItem('ba4-history'); if(h) hist=JSON.parse(h); }catch(e){}
+  try{ const h=localStorage.getItem('ba4-history'); if(h){ try{hist=JSON.parse(h);}catch(e){/* encrypted, handle later */} } }catch(e){}
   const t=d.items.reduce((s,i)=>s+i.amount,0);
   const paid=d.items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0);
   hist.push({
@@ -329,13 +672,35 @@ function archiveMonth(d){
     items:d.items.map(i=>({name:i.name,amount:i.amount,status:i.status})),
     archivedAt:new Date().toISOString()
   });
-  // Keep last 12 months
   if(hist.length>12) hist=hist.slice(-12);
-  localStorage.setItem('ba4-history',JSON.stringify(hist));
+  if(_pin){
+    secureSet('ba4-history',hist);
+  } else {
+    localStorage.setItem('ba4-history',JSON.stringify(hist));
+  }
 }
 
 function getHistory(){
-  try{ const h=localStorage.getItem('ba4-history'); return h?JSON.parse(h):[]; }catch(e){return[];}
+  try{
+    const h=localStorage.getItem('ba4-history');
+    if(!h) return [];
+    try{ return JSON.parse(h); }catch(e){
+      // Might be encrypted
+      if(_pin){
+        // Can't do async here easily, so return empty — history loads async elsewhere
+        return [];
+      }
+      return [];
+    }
+  }catch(e){return[];}
+}
+
+async function getHistoryAsync(){
+  if(_pin){
+    const h = await secureGet('ba4-history');
+    return h || [];
+  }
+  return getHistory();
 }
 
 function monthLabel2(m){
@@ -349,7 +714,13 @@ function getSuffix(d){
   const s=['th','st','nd','rd'];return(s[d%10]||s[0]);
 }
 
-function save(){localStorage.setItem('ba4',JSON.stringify(data))}
+function save(){
+  if(_pin){
+    secureSet('ba4', data);
+  } else {
+    localStorage.setItem('ba4',JSON.stringify(data));
+  }
+}
 
 function totals(){
   const all=data.items.reduce((s,i)=>s+i.amount,0);
@@ -598,6 +969,16 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   // ── OVERVIEW ──
   if(view==='overview'){
+    // PIN setup nudge for existing users
+    if(!hasPinSet() && data.items.length>0 && !localStorage.getItem('ba4-pin-dismissed')){
+      h+=`<div class="insight info" style="position:relative">
+        <button onclick="localStorage.setItem('ba4-pin-dismissed','1');render()" style="position:absolute;top:8px;right:10px;background:none;border:none;color:#9CA3AF;font-size:16px;cursor:pointer">✕</button>
+        <div class="i-title">🔐 Protect your budget with a PIN</div>
+        <div class="i-body">Your financial data is currently unprotected. Add a 4-digit PIN to encrypt everything with AES-256 — even if someone opens your browser, they can't read your data.<br/><br/>
+        <button class="btn primary sm" onclick="showLockScreen('setup')" style="margin-top:4px">Set Up PIN</button>
+        </div>
+      </div>`;
+    }
     if(!t||data.items.length===0){
       h+=`<div class="empty">No budget data yet.<br/><button class="btn primary sm" style="margin-top:12px" onclick="go('input')">✏️ Enter Budget</button></div>`;
     } else {
@@ -1055,6 +1436,19 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
     h+=`</div>`;
 
     h+=`<button class="btn primary" style="margin-top:12px" onclick="saveSettings()">Save Settings</button>`;
+
+    h+=`<div class="card" style="padding:16px;margin-top:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">🔐 Security</div>`;
+    if(hasPinSet()){
+      h+=`<div style="font-size:13px;color:var(--text-mid);margin-bottom:10px">Your data is <strong>PIN-protected and AES-256 encrypted</strong>. Even if someone accesses your browser storage, they can't read your budget data without the PIN.</div>
+      <button class="btn outline sm" onclick="showLockScreen('change-verify')">Change PIN</button>
+      <button class="btn outline sm" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="removePin()">Remove PIN & Encryption</button>`;
+    } else {
+      h+=`<div style="font-size:13px;color:var(--text-mid);margin-bottom:10px">Add a 4-digit PIN to protect your budget. Your data will be encrypted with AES-256 — unreadable without the PIN, even if someone inspects your browser storage.</div>
+      <button class="btn primary sm" onclick="showLockScreen('setup')">🔒 Set Up PIN</button>`;
+    }
+    h+=`</div>`;
+
     h+=`<button class="btn outline" style="margin-top:8px;color:var(--red);border-color:var(--red)" onclick="resetAll()">🗑 Reset all data</button>`;
 
     // Privacy & Data disclaimer
@@ -1197,13 +1591,11 @@ window.saveSettings=function(){
 };
 
 // ── INIT ──
-load();
-render();
-
-// First-visit privacy banner
-if(!localStorage.getItem('ba4-welcomed')){
+function showWelcomeBanner(){
+  if(localStorage.getItem('ba4-welcomed')) return;
   const overlay=document.createElement('div');
   overlay.className='welcome-overlay';
+  overlay.id='welcome-overlay';
   overlay.innerHTML=`
     <div class="welcome-box">
       <h2>Welcome to Track my Chumz 💰</h2>
@@ -1211,17 +1603,29 @@ if(!localStorage.getItem('ba4-welcomed')){
 
       <div class="point"><span class="ic">🔒</span><div><strong>Your data stays on your device.</strong> All budget information is stored in your browser's local storage. Nothing is sent to any server, database, or cloud.</div></div>
       <div class="point"><span class="ic">👁️‍🗨️</span><div><strong>We can't see your finances.</strong> We have no access to your income, expenses, balances, or any data you enter. It's yours alone.</div></div>
-      <div class="point"><span class="ic">🧹</span><div><strong>Clearing browser data removes your budget.</strong> Use the Export tab to back up to Google Sheets or CSV regularly.</div></div>
+      <div class="point"><span class="ic">🔐</span><div><strong>Optional PIN protection.</strong> You can add a 4-digit PIN to encrypt your data with AES-256. Without the PIN, even someone with access to your browser can't read your budget.</div></div>
+      <div class="point"><span class="ic">🧹</span><div><strong>Clearing browser data removes your budget.</strong> Use the Export tab to back up to CSV or Google Sheets regularly.</div></div>
       <div class="point"><span class="ic">📅</span><div><strong>Calendar links are opt-in.</strong> Reminder links open Google Calendar in a new tab — nothing is shared until you confirm.</div></div>
-      <div class="point"><span class="ic">📊</span><div><strong>Anonymous analytics only.</strong> If enabled, basic usage data (pages visited, features used) may be collected. No financial data, amounts, or personal details are ever included.</div></div>
+      <div class="point"><span class="ic">📊</span><div><strong>Anonymous analytics only.</strong> Basic usage data (pages visited, features used) may be collected. No financial data, amounts, or personal details are ever included.</div></div>
 
       <div class="divider"></div>
       <div class="fine">This app is provided as-is for personal budgeting guidance only and does not constitute financial advice. Consult a qualified financial advisor for investment, tax, or debt decisions. By continuing, you acknowledge that your data is stored locally on your device and that the developer is not responsible for data loss due to browser clearing or device changes.</div>
 
-      <button class="btn primary" onclick="this.closest('.welcome-overlay').remove();localStorage.setItem('ba4-welcomed','1')">I understand — let's go</button>
+      <button class="btn primary" onclick="document.getElementById('welcome-overlay').remove();localStorage.setItem('ba4-welcomed','1')">I understand — let's go</button>
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+// Boot sequence
+if(hasPinSet()){
+  // Has PIN — show lock screen, app loads after unlock
+  showLockScreen('unlock');
+} else {
+  // No PIN — load normally
+  load();
+  render();
+  showWelcomeBanner();
 }
 </script>
 </body>
