@@ -498,14 +498,14 @@ function copyTSV(){
 // HIDDEN COSTS & MPESA DATA
 // ═══════════════════════════════════════
 const LEAKS=[
-  {name:"Daily coffee/tea",mo:4500,tip:"KES 150/day = KES 4,500/month. Brew at home 3 days/week, save KES 2,700."},
-  {name:"Ride-hailing (Bolt/Uber)",mo:6000,tip:"Short rides add up. Batch errands or matatus for routine routes."},
-  {name:"Airtime top-ups",mo:3000,tip:"Small top-ups feel invisible. Switch to a monthly bundle."},
-  {name:"Snacks & fast food",mo:5000,tip:"KES 200/day = KES 5,000/month. Pack snacks from home."},
-  {name:"M-Pesa transaction fees",mo:800,tip:"KES 20-100 per send. Use Till (free) over Send Money. Batch payments."},
-  {name:"Bank charges & ATM fees",mo:500,tip:"ATM + monthly charges = KES 500+. Go cashless where possible."},
-  {name:"Streaming subscriptions",mo:2500,tip:"Netflix + Showmax + Spotify + YouTube Premium? Pick 2, share accounts."},
-  {name:"Unplanned data bundles",mo:2000,tip:"Out-of-bundle data is 4x more expensive. Set a monthly WiFi+data budget."},
+  {id:"coffee",name:"Daily coffee/tea",mo:4500,tip:"KES 150/day = KES 4,500/month. Brew at home 3 days/week, save KES 2,700."},
+  {id:"rides",name:"Ride-hailing (Bolt/Uber)",mo:6000,tip:"Short rides add up. Batch errands or matatus for routine routes."},
+  {id:"airtime",name:"Airtime top-ups",mo:3000,tip:"Small top-ups feel invisible. Switch to a monthly bundle."},
+  {id:"snacks",name:"Snacks & fast food",mo:5000,tip:"KES 200/day = KES 5,000/month. Pack snacks from home."},
+  {id:"mpesa_fees",name:"M-Pesa transaction fees",mo:800,tip:"KES 20-100 per send. Use Till (free) over Send Money. Batch payments."},
+  {id:"bank_fees",name:"Bank charges & ATM fees",mo:500,tip:"ATM + monthly charges = KES 500+. Go cashless where possible."},
+  {id:"streaming",name:"Streaming subscriptions",mo:2500,tip:"Netflix + Showmax + Spotify + YouTube Premium? Pick 2, share accounts."},
+  {id:"data",name:"Unplanned data bundles",mo:2000,tip:"Out-of-bundle data is 4x more expensive. Set a monthly WiFi+data budget."},
 ];
 
 const MPESA=[
@@ -528,7 +528,7 @@ function render(){
     {id:'analysis',label:'Analysis',icon:'🧠'},
     {id:'calendar',label:'Reminders',icon:'📅'},
     {id:'export',label:'Export',icon:'📤'},
-    {id:'hidden',label:'Hidden Costs',icon:'🔍'},
+    {id:'hidden',label:'Check-Up',icon:'🔍'},
     {id:'mpesa',label:'M-Pesa Lock',icon:'🔒'},
     {id:'history',label:'History',icon:'📁'},
     {id:'settings',label:'Settings',icon:'⚙️'},
@@ -761,12 +761,50 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   // ── HIDDEN COSTS ──
   if(view==='hidden'){
-    h+=`<div class="sec-title">Hidden Expense Detector</div><div class="sec-sub">Small recurring costs that drain your budget every month without you noticing.</div>`;
-    LEAKS.forEach(l=>{
-      h+=`<div class="leak"><div class="leak-hd"><span class="leak-nm">${l.name}</span><span class="leak-cost">~${K(l.mo)}/mo</span></div><div class="leak-tip">${l.tip}</div></div>`;
-    });
-    const total=LEAKS.reduce((s,l)=>s+l.mo,0);
-    h+=`<div class="insight warn"><div class="i-title">🧮 Total hidden drain</div><div class="i-body">If all apply: up to <strong>${K(total)}</strong>/month. Even cutting half saves <strong>${K(Math.round(total/2))}</strong> — that's a decent SACCO contribution.</div></div>`;
+    const myLeaks=profile.myLeaks||[];
+    const hasSelections=myLeaks.length>0;
+
+    h+=`<div class="sec-title">Hidden Expense Check-Up</div>`;
+
+    if(hasSelections){
+      // Show their selected costs with totals
+      const mine=LEAKS.filter(l=>myLeaks.includes(l.id));
+      const myTotal=mine.reduce((s,l)=>s+l.mo,0);
+
+      h+=`<div class="sec-sub">These are the ones you identified as relevant to you. Here's what they could be costing.</div>`;
+
+      h+=`<div class="card" style="padding:16px;margin-bottom:14px;border:2px solid var(--amber)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:14px;font-weight:700;color:var(--slate)">Estimated monthly impact</div>
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--amber)">up to ${K(myTotal)}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-light)">That's up to ${K(myTotal*12)}/year if all apply at full estimate · Your actual amounts may differ</div>
+      </div>`;
+
+      mine.forEach(l=>{
+        h+=`<div class="leak"><div class="leak-hd"><span class="leak-nm">${l.name}</span><span class="leak-cost">up to ~${K(l.mo)}/mo</span></div><div class="leak-tip">${l.tip}</div></div>`;
+      });
+
+      h+=`<div class="insight tip"><div class="i-title">💡 These are estimates, not facts</div><div class="i-body">The amounts above are common ranges — yours could be higher or lower. The point is to make you aware of spending that often flies under the radar. Track these for a week to find your real numbers. Update your selections in <span style="color:var(--blue);cursor:pointer;text-decoration:underline" onclick="go('settings')">Settings</span>.</div></div>`;
+
+    } else {
+      // No selections — self-assessment checklist
+      h+=`<div class="sec-sub">Small recurring costs can quietly add up. Go through this list and check any that apply to <em>your</em> spending. Not all of these will be relevant to you — that's fine.</div>`;
+
+      LEAKS.forEach(l=>{
+        h+=`<label class="leak" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer">
+          <input type="checkbox" class="hid-chk" value="${l.id}" style="width:20px;height:20px;accent-color:var(--green);margin-top:2px;flex-shrink:0"/>
+          <div style="flex:1">
+            <div class="leak-hd"><span class="leak-nm">Do you spend on ${l.name.toLowerCase()}?</span><span class="leak-cost">could be ~${K(l.mo)}/mo</span></div>
+            <div class="leak-tip"><strong>If yes:</strong> ${l.tip}</div>
+          </div>
+        </label>`;
+      });
+
+      h+=`<div id="hid-total" style="margin-top:12px"></div>`;
+      h+=`<button class="btn primary" style="margin-top:12px" onclick="saveHiddenSelections()">Save My Selections</button>`;
+      h+=`<div style="font-size:12px;color:var(--text-light);margin-top:8px;text-align:center">Only checked items will show in your profile. Amounts are estimates based on common spending patterns.</div>`;
+    }
   }
 
 
@@ -1045,6 +1083,25 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   $('#app').innerHTML=h;
   if(view==='input'){const ta=$('#raw-input');if(ta&&!data.rawInput)ta.focus();}
+
+  // Live total for hidden costs checklist
+  if(view==='hidden' && !profile.myLeaks?.length){
+    document.querySelectorAll('.hid-chk').forEach(chk=>{
+      chk.addEventListener('change',()=>{
+        let total=0, count=0;
+        document.querySelectorAll('.hid-chk:checked').forEach(c=>{
+          const leak=LEAKS.find(l=>l.id===c.value);
+          if(leak){total+=leak.mo;count++;}
+        });
+        const el=$('#hid-total');
+        if(count>0){
+          el.innerHTML=`<div class="insight warn"><div class="i-title">🧮 ${count} hidden cost${count>1?'s':''} = ${K(total)}/month</div><div class="i-body">That's <strong>${K(total*12)}/year</strong> on things you barely notice. Save your selections to personalise this page.</div></div>`;
+        } else {
+          el.innerHTML='';
+        }
+      });
+    });
+  }
 }
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
