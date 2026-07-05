@@ -135,6 +135,15 @@ textarea{resize:vertical;line-height:1.6}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--slate);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
 .toast.show{opacity:1}
 
+.welcome-overlay{position:fixed;inset:0;background:rgba(27,40,56,.88);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.welcome-box{background:#fff;border-radius:16px;padding:28px 24px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto}
+.welcome-box h2{font-size:20px;font-weight:700;color:var(--slate);margin-bottom:4px}
+.welcome-box .sub{font-size:14px;color:var(--text-mid);margin-bottom:20px}
+.welcome-box .point{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;font-size:13px;color:var(--text-mid);line-height:1.6}
+.welcome-box .point .ic{font-size:18px;flex-shrink:0;margin-top:1px}
+.welcome-box .divider{height:1px;background:var(--border);margin:16px 0}
+.welcome-box .fine{font-size:11px;color:var(--text-light);line-height:1.6;margin-bottom:16px}
+
 @media(max-width:400px){
   .a-grid{grid-template-columns:1fr}
   .hdr-stats{gap:10px;font-size:12px}
@@ -1019,10 +1028,30 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       <strong>Events tracked:</strong> tab_view, budget_parsed, status_changed, item_added, item_deleted, export_csv, export_clipboard, budget_reused, settings_saved.<br/><br/>
       <a href="https://analytics.google.com" target="_blank" style="color:var(--blue);font-weight:600">Open Google Analytics →</a></div>
     </div>`;
+
+    // Privacy & Data disclaimer
+    h+=`<div class="card" style="padding:16px;margin-top:16px;border:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">🔒 Your Data, Your Device</div>
+      <div style="font-size:12px;color:var(--text-mid);line-height:1.7">
+        <p style="margin-bottom:8px"><strong>All your budget data stays on this device.</strong> Track my Chumz stores everything in your browser's local storage. Nothing is sent to any server, database, or cloud service. We cannot see, access, or recover your data.</p>
+        <p style="margin-bottom:8px"><strong>What this means:</strong></p>
+        <p style="margin-bottom:4px">• Your income, expenses, balances, and budget history never leave your browser.</p>
+        <p style="margin-bottom:4px">• Clearing your browser data or switching devices will remove your budget data.</p>
+        <p style="margin-bottom:4px">• Use the Export tab to back up your data to Google Sheets or CSV regularly.</p>
+        <p style="margin-bottom:4px">• No account or login is required. No personal data is collected.</p>
+        <p style="margin-bottom:8px">• Google Calendar links open in a new tab — no data is shared until you confirm in Google.</p>
+        <p style="margin-bottom:8px"><strong>Analytics:</strong> If the site owner has enabled Google Analytics, anonymous usage data (pages visited, features used) may be collected to improve the app. This does not include any financial data, amounts, or budget details. You can block this with any standard ad blocker.</p>
+        <p style="margin-bottom:0"><strong>This app is provided as-is for personal budgeting guidance only. It is not financial advice.</strong> Always consult a qualified financial advisor for investment, tax, or debt decisions.</p>
+      </div>
+    </div>`;
   }
 
   h+=`</div>`;
-  h+=`<div class="footer">Built by <a href="https://wakaratech.com" target="_blank">Wakara Technologies</a> · Nairobi</div>`;
+  h+=`<div class="footer">
+    <div style="margin-bottom:6px">🔒 Your data stays on this device · <span style="cursor:pointer;color:var(--blue);text-decoration:underline" onclick="go('settings')">Privacy info</span></div>
+    <div>Built by <a href="https://wakaratech.com" target="_blank">Wakara Technologies</a> · Nairobi</div>
+    <div style="margin-top:4px;font-size:11px;color:#9CA3AF">Not financial advice. For personal budgeting guidance only.</div>
+  </div>`;
 
   $('#app').innerHTML=h;
   if(view==='input'){const ta=$('#raw-input');if(ta&&!data.rawInput)ta.focus();}
@@ -1123,6 +1152,30 @@ window.saveSettings=function(){
 // ── INIT ──
 load();
 render();
+
+// First-visit privacy banner
+if(!localStorage.getItem('ba4-welcomed')){
+  const overlay=document.createElement('div');
+  overlay.className='welcome-overlay';
+  overlay.innerHTML=`
+    <div class="welcome-box">
+      <h2>Welcome to Track my Chumz 💰</h2>
+      <div class="sub">A budget tool built for how Kenyans actually manage money.</div>
+
+      <div class="point"><span class="ic">🔒</span><div><strong>Your data stays on your device.</strong> All budget information is stored in your browser's local storage. Nothing is sent to any server, database, or cloud.</div></div>
+      <div class="point"><span class="ic">👁️‍🗨️</span><div><strong>We can't see your finances.</strong> We have no access to your income, expenses, balances, or any data you enter. It's yours alone.</div></div>
+      <div class="point"><span class="ic">🧹</span><div><strong>Clearing browser data removes your budget.</strong> Use the Export tab to back up to Google Sheets or CSV regularly.</div></div>
+      <div class="point"><span class="ic">📅</span><div><strong>Calendar links are opt-in.</strong> Reminder links open Google Calendar in a new tab — nothing is shared until you confirm.</div></div>
+      <div class="point"><span class="ic">📊</span><div><strong>Anonymous analytics only.</strong> If enabled, basic usage data (pages visited, features used) may be collected. No financial data, amounts, or personal details are ever included.</div></div>
+
+      <div class="divider"></div>
+      <div class="fine">This app is provided as-is for personal budgeting guidance only and does not constitute financial advice. Consult a qualified financial advisor for investment, tax, or debt decisions. By continuing, you acknowledge that your data is stored locally on your device and that the developer is not responsible for data loss due to browser clearing or device changes.</div>
+
+      <button class="btn primary" onclick="this.closest('.welcome-overlay').remove();localStorage.setItem('ba4-welcomed','1')">I understand — let's go</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
 </script>
 </body>
 </html>
