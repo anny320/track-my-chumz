@@ -1559,25 +1559,6 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   $('#app').innerHTML=h;
   if(view==='input'){const ta=$('#raw-input');if(ta&&!data.rawInput)ta.focus();}
-
-  // Live total for hidden costs checklist
-  if(view==='hidden' && !profile.myLeaks?.length){
-    document.querySelectorAll('.hid-chk').forEach(chk=>{
-      chk.addEventListener('change',()=>{
-        let total=0, count=0;
-        document.querySelectorAll('.hid-chk:checked').forEach(c=>{
-          const leak=LEAKS.find(l=>l.id===c.value);
-          if(leak){total+=leak.mo;count++;}
-        });
-        const el=$('#hid-total');
-        if(count>0){
-          el.innerHTML=`<div class="insight warn"><div class="i-title">🧮 ${count} hidden cost${count>1?'s':''} = ${K(total)}/month</div><div class="i-body">That's <strong>${K(total*12)}/year</strong> on things you barely notice. Save your selections to personalise this page.</div></div>`;
-        } else {
-          el.innerHTML='';
-        }
-      });
-    });
-  }
 }
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1594,6 +1575,31 @@ window.saveHiddenSelections=function(){
   saveProfile(p);
   toast(`${leaks.length} hidden cost${leaks.length>1?'s':''} saved`);
   track('hidden_costs_saved',{count:leaks.length});
+  render();
+};
+
+window.updateHiddenTotal=function(){
+  let total=0, count=0;
+  document.querySelectorAll('.hid-chk:checked').forEach(c=>{
+    const leak=LEAKS.find(l=>l.id===c.value);
+    if(leak){total+=leak.mo;count++;}
+  });
+  const el=$('#hid-total');
+  const btn=$('#hid-save-btn');
+  if(count>0){
+    el.innerHTML=`<div class="insight warn"><div class="i-title">🧮 ${count} selected = up to ${K(total)}/month</div><div class="i-body">That's up to <strong>${K(total*12)}/year</strong> on things that fly under the radar. Save your selections to see this as a personalised summary.</div></div>`;
+    if(btn) btn.style.display='block';
+  } else {
+    el.innerHTML='';
+    if(btn) btn.style.display='none';
+  }
+};
+
+window.clearHiddenSelections=function(){
+  const p=loadProfile();
+  p.myLeaks=[];
+  saveProfile(p);
+  toast('Selections cleared — redo your check-up');
   render();
 };
 
