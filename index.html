@@ -173,7 +173,11 @@ textarea{resize:vertical;line-height:1.6}
 <div class="toast" id="toast"></div>
 
 <script>
-const K = n => `KES ${Math.round(Number(n||0)).toLocaleString()}`;
+const K = n => {
+  const p = loadProfile();
+  const cur = p.currency || 'KES';
+  return `${cur} ${Math.round(Number(n||0)).toLocaleString()}`;
+};
 const pct = (a,b) => b>0 ? Math.min((a/b)*100,100) : 0;
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const $ = s => document.querySelector(s);
@@ -812,6 +816,19 @@ function analyze(){
     }
   }
 
+  // Hidden costs from profile
+  const prof=loadProfile();
+  if(prof.myLeaks&&prof.myLeaks.length>0){
+    const myTotal=prof.myLeaks.reduce((s,id)=>{const leak=LEAKS.find(l=>l.id===id);return s+(leak?leak.mo:0);},0);
+    if(myTotal>0){
+      f.push({icon:'👻',title:`Hidden costs you identified: ~${K(myTotal)}/month`,type:'tip',
+        body:`You flagged ${prof.myLeaks.length} phantom expense${prof.myLeaks.length>1?'s':''} in your Check-Up. That's up to ${K(myTotal*12)}/year on top of your budget. Even cutting half saves ${K(Math.round(myTotal/2))}/month.`});
+    }
+  } else {
+    f.push({icon:'🔍',title:'Run your Hidden Cost Check-Up',type:'info',
+      body:`Go to the Check-Up tab and identify which small recurring costs apply to you. Most people have 3-5 that add up to thousands per month.`});
+  }
+
   return f;
 }
 
@@ -958,10 +975,29 @@ School fees - 12000
 Savings - 15000
 Gym - 3k?
 Netflix - 1500 paid">${data.rawInput||''}</textarea>
-    <button class="btn primary" style="margin-top:12px" onclick="parseInput()">Parse & Analyze Budget</button>`;
+    <button class="btn primary" style="margin-top:12px" onclick="parseInput()">${data.items.length>0?'Re-parse & Replace Budget':'Parse & Analyze Budget'}</button>`;
     if(data.items.length>0){
       h+=`<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-        <button class="btn outline" onclick="go('overview')">View Current Budget →</button>
+        <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">Quick Edit Current Budget</div>
+        <div style="font-size:12px;color:var(--text-light);margin-bottom:10px">Edit income, balance, or individual items without re-parsing.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <div style="flex:1"><label class="fl">Income</label><input class="inp" id="qe-income" type="number" value="${data.income||''}" inputmode="numeric"/></div>
+          <div style="flex:1"><label class="fl">Balance</label><input class="inp" id="qe-balance" type="number" value="${data.balance!==null?data.balance:''}" inputmode="numeric" placeholder="Optional"/></div>
+        </div>`;
+      data.items.forEach((item,i)=>{
+        h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:8px;background:#fff;border-radius:8px;border:1px solid #E5E7EB">
+          <input class="inp qe-name" type="text" value="${esc(item.name)}" data-idx="${i}" style="flex:2;padding:8px;font-size:13px"/>
+          <input class="inp qe-amt" type="number" value="${item.amount}" data-idx="${i}" style="width:90px;padding:8px;font-size:13px;text-align:right" inputmode="numeric"/>
+          <select class="inp qe-st" data-idx="${i}" style="width:80px;padding:8px;font-size:11px">
+            <option value="unpaid" ${item.status==='unpaid'?'selected':''}>Unpaid</option>
+            <option value="paid" ${item.status==='paid'?'selected':''}>Paid</option>
+            <option value="maybe" ${item.status==='maybe'?'selected':''}>Maybe</option>
+          </select>
+          <button onclick="quickDeleteItem(${i})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:4px">✕</button>
+        </div>`;
+      });
+      h+=`<button class="btn primary" style="margin-top:10px" onclick="saveQuickEdits()">Save Changes</button>
+        <button class="btn outline" style="margin-top:8px" onclick="go('overview')">View Overview →</button>
       </div>`;
     }
   }
@@ -1387,10 +1423,16 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
         <label class="fl">Currency label</label>
         <select class="inp" id="pf-currency">
           <option value="KES" ${(p.currency||'KES')==='KES'?'selected':''}>KES (Kenya Shilling)</option>
+          <option value="NGN" ${p.currency==='NGN'?'selected':''}>NGN (Nigerian Naira)</option>
+          <option value="GBP" ${p.currency==='GBP'?'selected':''}>GBP (British Pound)</option>
+          <option value="USD" ${p.currency==='USD'?'selected':''}>USD (US Dollar)</option>
+          <option value="EUR" ${p.currency==='EUR'?'selected':''}>EUR (Euro)</option>
           <option value="UGX" ${p.currency==='UGX'?'selected':''}>UGX (Uganda Shilling)</option>
           <option value="TZS" ${p.currency==='TZS'?'selected':''}>TZS (Tanzania Shilling)</option>
           <option value="RWF" ${p.currency==='RWF'?'selected':''}>RWF (Rwanda Franc)</option>
-          <option value="USD" ${p.currency==='USD'?'selected':''}>USD (US Dollar)</option>
+          <option value="ZAR" ${p.currency==='ZAR'?'selected':''}>ZAR (South African Rand)</option>
+          <option value="GHS" ${p.currency==='GHS'?'selected':''}>GHS (Ghana Cedi)</option>
+          <option value="ETB" ${p.currency==='ETB'?'selected':''}>ETB (Ethiopian Birr)</option>
         </select>
       </div>
     </div>
@@ -1502,6 +1544,46 @@ function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g
 
 // ── ACTIONS ──
 window.go=function(v){view=v;render();window.scrollTo(0,0);track('tab_view',{tab:v});};
+
+window.saveHiddenSelections=function(){
+  const leaks=[];
+  document.querySelectorAll('.hid-chk:checked').forEach(c=>leaks.push(c.value));
+  if(leaks.length===0){toast('Check at least one that applies to you');return;}
+  const p=loadProfile();
+  p.myLeaks=leaks;
+  saveProfile(p);
+  toast(`${leaks.length} hidden cost${leaks.length>1?'s':''} saved`);
+  track('hidden_costs_saved',{count:leaks.length});
+  render();
+};
+
+window.saveQuickEdits=function(){
+  const inc=$('#qe-income');
+  const bal=$('#qe-balance');
+  if(inc) data.income=Number(inc.value)||0;
+  if(bal) data.balance=bal.value!==''?Number(bal.value):null;
+  document.querySelectorAll('.qe-name').forEach(el=>{
+    const i=Number(el.dataset.idx);
+    if(data.items[i]) data.items[i].name=el.value.trim()||data.items[i].name;
+  });
+  document.querySelectorAll('.qe-amt').forEach(el=>{
+    const i=Number(el.dataset.idx);
+    if(data.items[i]) data.items[i].amount=Math.abs(Number(el.value))||data.items[i].amount;
+  });
+  document.querySelectorAll('.qe-st').forEach(el=>{
+    const i=Number(el.dataset.idx);
+    if(data.items[i]) data.items[i].status=el.value;
+  });
+  save();
+  toast('Budget updated');
+  track('budget_quick_edited');
+  render();
+};
+
+window.quickDeleteItem=function(idx){
+  data.items.splice(idx,1);
+  save();render();
+};
 
 window.parseInput=function(){
   const raw=$('#raw-input').value.trim();
