@@ -735,16 +735,21 @@ function totals(){
   const unpaid=data.items.filter(i=>i.status==='unpaid').reduce((s,i)=>s+i.amount,0);
   const maybe=data.items.filter(i=>i.status==='maybe').reduce((s,i)=>s+i.amount,0);
   // Income from sources
-  const incReceived=(data.incomeSources||[]).filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0);
-  const incExpected=(data.incomeSources||[]).filter(s=>s.status==='expected').reduce((s,i)=>s+i.amount,0);
-  const incTotal=incReceived+incExpected;
+  const srcs=data.incomeSources||[];
+  const incReceived=srcs.filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0);
+  const incPartialRcvd=srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.receivedAmount||0),0);
+  const incPending=srcs.filter(s=>s.status==='pending').reduce((s,i)=>s+i.amount,0);
+  const incPartialOwed=srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.amount-(i.receivedAmount||0)),0);
+  const incInHand=incReceived+incPartialRcvd;
+  const incPendingTotal=incPending+incPartialOwed;
+  const incTotal=incInHand+incPendingTotal;
   // Use sources total if sources exist, otherwise fall back to flat income
-  const effectiveIncome=data.incomeSources&&data.incomeSources.length>0?incTotal:data.income;
+  const effectiveIncome=srcs.length>0?incTotal:data.income;
   return {all,paid,unpaid,maybe,partialOwed,
     remaining:effectiveIncome-all,
     stillDue:unpaid+maybe+partialOwed,
     actuallyOwed:unpaid+partialOwed,
-    incReceived,incExpected,incTotal:effectiveIncome};
+    incReceived:incInHand,incExpected:incPendingTotal,incTotal:effectiveIncome};
 }
 
 
@@ -933,6 +938,7 @@ function render(){
   const tabs=[
     {id:'input',label:'Budget Input',icon:'✏️'},
     {id:'overview',label:'Overview',icon:'📊'},
+    {id:'income',label:'Income',icon:'💵'},
     {id:'analysis',label:'Analysis',icon:'🧠'},
     {id:'calendar',label:'Reminders',icon:'📅'},
     {id:'export',label:'Export',icon:'📤'},
@@ -1137,44 +1143,48 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       });
       h+=`<tr class="b-total"><td>Total Expenses</td><td class="amt">${K(t.all)}</td><td></td><td></td></tr></tbody></table>`;
 
-      // ── INCOME SOURCES ──
-      h+=`<div style="margin-top:20px;padding-top:16px;border-top:2px solid var(--border)">
-        <div style="font-size:14px;font-weight:700;color:var(--slate);margin-bottom:10px">Income Sources</div>`;
+      // ── INCOME SUMMARY IN OVERVIEW ──
+      const incSrcs=data.incomeSources||[];
+      if(incSrcs.length>0){
+        h+=`<div style="margin-top:20px;padding-top:16px;border-top:2px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:14px;font-weight:700;color:var(--slate)">💵 Income</div>
+            <button class="btn outline sm" style="font-size:11px;padding:6px 12px" onclick="go('income')">Manage →</button>
+          </div>`;
+        const rcv=incSrcs.filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0);
+        const pnd=incSrcs.filter(s=>s.status==='pending').reduce((s,i)=>s+i.amount,0);
+        const prt=incSrcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.receivedAmount||0),0);
+        const prtOwed=incSrcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.amount-(i.receivedAmount||0)),0);
+        const moneyInHand=rcv+prt;
+        const moneyPending=pnd+prtOwed;
 
-      if(data.incomeSources&&data.incomeSources.length>0){
-        h+=`<table class="b-table"><thead><tr><th>Source</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th><th></th></tr></thead><tbody>`;
-        data.incomeSources.forEach(s=>{
-          const clr=s.status==='received'?'var(--green)':'var(--blue)';
-          h+=`<tr>
-            <td>${esc(s.name)}</td>
-            <td class="amt"><input type="number" value="${s.amount}" onchange="editIncAmt('${s.id}',this.value)" style="width:85px;border:1px solid transparent;background:none;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;text-align:right;padding:4px 6px;border-radius:4px;outline:none" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'" inputmode="numeric"/></td>
-            <td class="status">
-              <select onchange="setIncSt('${s.id}',this.value)" style="border:none;background:none;font-size:11px;font-weight:700;cursor:pointer;color:${clr}">
-                <option value="received" ${s.status==='received'?'selected':''}>✓ Received</option>
-                <option value="expected" ${s.status==='expected'?'selected':''}>⏳ Expected</option>
-              </select>
-            </td>
-            <td><button class="del" onclick="delInc('${s.id}')">✕</button></td>
-          </tr>`;
+        h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="flex:1;min-width:100px;background:var(--green-soft);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:var(--green)">${K(moneyInHand)}</div>
+            <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.5px">In Hand</div>
+          </div>
+          <div style="flex:1;min-width:100px;background:#EFF6FF;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:var(--blue)">${K(moneyPending)}</div>
+            <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.5px">Pending</div>
+          </div>
+        </div>`;
+
+        // Quick list
+        incSrcs.forEach(s=>{
+          const clr=s.status==='received'?'var(--green)':s.status==='pending'?'var(--blue)':'var(--amber)';
+          const label=s.status==='received'?'✓':s.status==='pending'?'⏳':'◐';
+          const displayAmt=s.status==='partial'?`${K(s.receivedAmount||0)} of ${K(s.amount)}`:K(s.amount);
+          h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span style="color:var(--text-mid)">${esc(s.name)}</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:500;color:${clr}">${label} ${displayAmt}</span>
+          </div>`;
         });
-        h+=`<tr class="b-total"><td>Total Income</td><td class="amt">${K(t.incTotal)}</td><td></td><td></td></tr>`;
-        if(t.incReceived>0&&t.incExpected>0){
-          h+=`<tr><td style="font-size:11px;color:var(--green)">Received</td><td class="amt" style="font-size:11px;color:var(--green)">${K(t.incReceived)}</td><td></td><td></td></tr>`;
-          h+=`<tr><td style="font-size:11px;color:var(--blue)">Expected</td><td class="amt" style="font-size:11px;color:var(--blue)">${K(t.incExpected)}</td><td></td><td></td></tr>`;
-        }
-        h+=`</tbody></table>`;
-      } else if(data.income>0){
-        h+=`<div style="font-size:13px;color:var(--text-mid);margin-bottom:10px">Flat income: ${K(data.income)} (from your parsed budget). Add sources below for better tracking.</div>`;
+        h+=`</div>`;
+      } else {
+        h+=`<div style="margin-top:20px;padding-top:16px;border-top:2px solid var(--border);text-align:center">
+          <button class="btn outline" onclick="go('income')">💵 Add Income Sources</button>
+        </div>`;
       }
-
-      h+=`<div style="margin-top:10px"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px">Add income source</div>
-        <div class="edit-row">
-          <input type="text" id="inc-name" placeholder="e.g. Salary, Freelance"/>
-          <input type="number" id="inc-amt" placeholder="Amount" style="width:100px" inputmode="numeric"/>
-          <select id="inc-st" style="width:100px"><option value="received">Received</option><option value="expected">Expected</option></select>
-          <button class="btn primary sm" onclick="addInc()">+</button>
-        </div>
-      </div></div>`;
 
       h+=`<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px">Add an item</div>
         <div class="edit-row">
@@ -1190,6 +1200,116 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
         <button class="btn outline sm" onclick="go('calendar')">📅 Reminders</button>
         <button class="btn outline sm" onclick="go('export')">📤 Export</button>
       </div>`;
+    }
+  }
+
+
+  // ── INCOME TAB ──
+  if(view==='income'){
+    const srcs=data.incomeSources||[];
+    const rcv=srcs.filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0);
+    const pnd=srcs.filter(s=>s.status==='pending').reduce((s,i)=>s+i.amount,0);
+    const prtRcvd=srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.receivedAmount||0),0);
+    const prtOwed=srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.amount-(i.receivedAmount||0)),0);
+    const total=rcv+pnd+prtRcvd+prtOwed;
+    const inHand=rcv+prtRcvd;
+    const pending=pnd+prtOwed;
+
+    h+=`<div class="sec-title">Income — ${monthLabel}</div>`;
+
+    // Summary cards
+    h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="flex:1;min-width:90px;background:var(--green-soft);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--green)">${K(inHand)}</div>
+        <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Received</div>
+      </div>
+      <div style="flex:1;min-width:90px;background:#EFF6FF;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--blue)">${K(pending)}</div>
+        <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Pending</div>
+      </div>
+      <div style="flex:1;min-width:90px;background:var(--off-white);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--border)">
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--slate)">${K(total)}</div>
+        <div style="font-size:10px;color:var(--text-light);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Total</div>
+      </div>
+    </div>`;
+
+    if(pending>0&&t){
+      h+=`<div class="insight info"><div class="i-title">💡 Budget based on ${K(total)} total</div><div class="i-body">${K(pending)} is still pending. If it doesn't come through, your actual budget is only ${K(inHand)}. Your still-due expenses are ${K(t.stillDue)}${inHand<t.stillDue?` — which is more than what you have in hand. Be careful about spending until pending income arrives.`:`.`}</div></div>`;
+    }
+
+    // Income items
+    if(srcs.length>0){
+      srcs.forEach(s=>{
+        const isPartial=s.status==='partial';
+        const rcvAmt=s.receivedAmount||0;
+        const owed=s.amount-rcvAmt;
+        const pctRcv=isPartial&&s.amount>0?Math.round((rcvAmt/s.amount)*100):0;
+        const clr=s.status==='received'?'var(--green)':s.status==='pending'?'var(--blue)':'var(--amber)';
+        const label=s.status==='received'?'✓ Received':s.status==='pending'?'⏳ Pending':'◐ Partial';
+
+        h+=`<div class="card" style="padding:14px;margin-bottom:8px;border-left:3px solid ${clr}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--slate)">${esc(s.name)}</div>
+              ${s.description?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${esc(s.description)}</div>`:''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--slate)">
+                <input type="number" value="${s.amount}" onchange="editIncAmt('${s.id}',this.value)" style="width:95px;border:1px solid transparent;background:none;font-family:'DM Mono',monospace;font-size:15px;font-weight:600;text-align:right;padding:2px 4px;border-radius:4px;outline:none;color:var(--slate)" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'" inputmode="numeric"/>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            <select onchange="setIncSt('${s.id}',this.value)" style="border:1px solid #D1D5DB;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:${clr};padding:5px 8px;border-radius:6px;font-family:inherit">
+              <option value="received" ${s.status==='received'?'selected':''}>✓ Received</option>
+              <option value="partial" ${s.status==='partial'?'selected':''}>◐ Partial</option>
+              <option value="pending" ${s.status==='pending'?'selected':''}>⏳ Pending</option>
+            </select>
+            <div style="display:flex;gap:4px">
+              <button onclick="editIncDesc('${s.id}')" style="background:none;border:none;font-size:13px;cursor:pointer;padding:4px" title="Edit description">📝</button>
+              <button onclick="delInc('${s.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px">✕</button>
+            </div>
+          </div>
+
+          ${isPartial?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:11px;color:var(--text-light)">Received so far:</span>
+              <input type="number" value="${rcvAmt}" onchange="setIncRcvd('${s.id}',this.value)" style="width:100px;padding:6px 8px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;font-family:'DM Mono',monospace;text-align:right" inputmode="numeric"/>
+              <span style="font-size:11px;color:var(--text-light)">of ${K(s.amount)}</span>
+            </div>
+            <div style="height:4px;background:#F3F4F6;border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${pctRcv}%;background:var(--amber);border-radius:2px"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text-light);margin-top:3px">${pctRcv}% received · ${K(owed)} pending</div>
+          </div>`:''}
+        </div>`;
+      });
+    } else {
+      h+=`<div class="empty" style="padding:20px">No income sources added yet. Add your salary, freelance, side income, or any expected payments below.</div>`;
+    }
+
+    // Add new income source
+    h+=`<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">Add Income Source</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input class="inp" type="text" id="inc-name" placeholder="Source name (e.g. Salary - Qhala)"/>
+        <input class="inp" type="text" id="inc-desc" placeholder="Description (e.g. Monthly retainer, net of PAYE)"/>
+        <div style="display:flex;gap:8px">
+          <input class="inp" type="number" id="inc-amt" placeholder="Amount" inputmode="numeric" style="flex:1"/>
+          <select class="inp" id="inc-st" style="width:120px">
+            <option value="received">✓ Received</option>
+            <option value="partial">◐ Partial</option>
+            <option value="pending">⏳ Pending</option>
+          </select>
+        </div>
+        <button class="btn primary" onclick="addInc()">Add Income Source</button>
+      </div>
+    </div>`;
+
+    // Flat income migration note
+    if(data.income>0&&srcs.length===0){
+      h+=`<div class="insight tip" style="margin-top:12px"><div class="i-title">💡 You have a flat income of ${K(data.income)}</div><div class="i-body">This was parsed from your budget input. Add it as an income source above for better tracking — you'll be able to mark it as received, partial, or pending.</div></div>`;
     }
   }
 
@@ -1733,33 +1853,58 @@ window.editAmt=function(id,val){
 
 window.addInc=function(){
   const name=$('#inc-name').value.trim();
+  const desc=$('#inc-desc')?.value?.trim()||'';
   const amt=Number($('#inc-amt').value);
   const st=$('#inc-st').value;
   if(!name||!amt){toast('Enter source name and amount');return;}
   if(!data.incomeSources) data.incomeSources=[];
-  data.incomeSources.push({id:uid(),name,amount:Math.abs(amt),status:st});
-  // Update flat income to match sources total
+  const src={id:uid(),name,description:desc,amount:Math.abs(amt),status:st,receivedAmount:st==='received'?Math.abs(amt):0};
+  data.incomeSources.push(src);
   data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
   save();render();toast(`Added ${name}`);track('income_added');
 };
 
 window.delInc=function(id){
   data.incomeSources=data.incomeSources.filter(s=>s.id!==id);
-  data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
+  data.income=data.incomeSources.length>0?data.incomeSources.reduce((s,i)=>s+i.amount,0):data.income;
   save();render();
 };
 
 window.setIncSt=function(id,st){
   const s=data.incomeSources.find(x=>x.id===id);
-  if(s){s.status=st;save();render();track('income_status_changed',{status:st});}
+  if(!s)return;
+  s.status=st;
+  if(st==='received'){s.receivedAmount=s.amount;}
+  else if(st==='pending'){s.receivedAmount=0;}
+  else if(st==='partial'&&!s.receivedAmount){s.receivedAmount=0;}
+  save();render();track('income_status_changed',{status:st});
 };
 
 window.editIncAmt=function(id,val){
   const s=data.incomeSources.find(x=>x.id===id);
   if(!s)return;
   s.amount=Math.abs(Number(val))||s.amount;
-  data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
+  if(s.status==='received') s.receivedAmount=s.amount;
+  if(s.status==='partial'&&s.receivedAmount>s.amount) s.receivedAmount=s.amount;
+  data.income=data.incomeSources.reduce((si,i)=>si+i.amount,0);
   save();render();
+};
+
+window.setIncRcvd=function(id,val){
+  const s=data.incomeSources.find(x=>x.id===id);
+  if(!s)return;
+  const amt=Math.max(0,Math.min(Number(val)||0,s.amount));
+  s.receivedAmount=amt;
+  if(amt>=s.amount){s.status='received';s.receivedAmount=s.amount;}
+  else if(amt===0){s.status='pending';s.receivedAmount=0;}
+  save();render();
+};
+
+window.editIncDesc=function(id){
+  const s=data.incomeSources.find(x=>x.id===id);
+  if(!s)return;
+  const desc=prompt('Description:',s.description||'');
+  if(desc!==null){s.description=desc;save();render();}
 };
 
 window.addIt=function(){
