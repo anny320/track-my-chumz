@@ -635,8 +635,8 @@ function load(){
       }
     }
   }catch(e){}
-  if(!data) data={month:curMonth,income:0,balance:null,items:[],rawInput:'',history:[]};
-  if(!data.history) data.history=[];
+  if(!data) data={month:curMonth,income:0,incomeSources:[],balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];
 }
 
 async function loadEncrypted(){
@@ -656,8 +656,8 @@ async function loadEncrypted(){
       if(data.items&&data.items.length>0) view='overview';
     }
   }catch(e){}
-  if(!data) data={month:curMonth,income:0,balance:null,items:[],rawInput:'',history:[]};
-  if(!data.history) data.history=[];
+  if(!data) data={month:curMonth,income:0,incomeSources:[],balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];
 }
 
 function archiveMonth(d){
@@ -734,7 +734,17 @@ function totals(){
   const partialOwed=data.items.filter(i=>i.status==='partial').reduce((s,i)=>s+(i.amount-(i.paidAmount||0)),0);
   const unpaid=data.items.filter(i=>i.status==='unpaid').reduce((s,i)=>s+i.amount,0);
   const maybe=data.items.filter(i=>i.status==='maybe').reduce((s,i)=>s+i.amount,0);
-  return {all,paid,unpaid,maybe,partialOwed,remaining:data.income-all,stillDue:unpaid+maybe+partialOwed};
+  // Income from sources
+  const incReceived=(data.incomeSources||[]).filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0);
+  const incExpected=(data.incomeSources||[]).filter(s=>s.status==='expected').reduce((s,i)=>s+i.amount,0);
+  const incTotal=incReceived+incExpected;
+  // Use sources total if sources exist, otherwise fall back to flat income
+  const effectiveIncome=data.incomeSources&&data.incomeSources.length>0?incTotal:data.income;
+  return {all,paid,unpaid,maybe,partialOwed,
+    remaining:effectiveIncome-all,
+    stillDue:unpaid+maybe+partialOwed,
+    actuallyOwed:unpaid+partialOwed,
+    incReceived,incExpected,incTotal:effectiveIncome};
 }
 
 
@@ -940,14 +950,15 @@ function render(){
     <div class="hdr-row"><div class="hdr-tag">Track my Chumz 💰</div><div style="font-size:11px;color:#9CA3AF">Day ${dayNum}/${daysIn}</div></div>
     <div class="hdr-month">${getGreeting()}</div>
     <div style="font-size:13px;color:#9CA3AF;margin-top:2px">${monthLabel}${profile.payday?' · Payday: '+profile.payday+getSuffix(profile.payday):''}</div>`;
-  if(t&&data.income>0){
+  const effectiveIncome=t?t.incTotal:data.income;
+  if(t&&effectiveIncome>0){
     h+=`<div class="hdr-stats">
-      <div><span class="lb">Income</span> <span class="vl">${K(data.income)}</span></div>
-      <div><span class="lb">Expenses</span> <span class="vl ${t.all>data.income?'neg':'pos'}">${K(t.all)}</span></div>
+      <div><span class="lb">Income</span> <span class="vl">${K(effectiveIncome)}</span></div>
+      <div><span class="lb">Expenses</span> <span class="vl ${t.all>effectiveIncome?'neg':'pos'}">${K(t.all)}</span></div>
       <div><span class="lb">Left</span> <span class="vl ${t.remaining<0?'neg':'pos'}">${K(t.remaining)}</span></div>
     </div>
-    <div class="prog-track"><div class="prog-fill" style="width:${pct(t.all,data.income)}%;background:${t.all>data.income?'#EF4444':t.all>data.income*.85?'#F5A623':'#4ADE80'}"></div></div>
-    <div class="prog-sub">${Math.round(pct(t.all,data.income))}% of income committed · ${daysLeft} days left</div>`;
+    <div class="prog-track"><div class="prog-fill" style="width:${pct(t.all,effectiveIncome)}%;background:${t.all>effectiveIncome?'#EF4444':t.all>effectiveIncome*.85?'#F5A623':'#4ADE80'}"></div></div>
+    <div class="prog-sub">${Math.round(pct(t.all,effectiveIncome))}% of income committed · ${daysLeft} days left</div>`;
   }
   h+=`</div>`;
 
@@ -1103,7 +1114,7 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
               <div style="font-size:10px;color:var(--text-light);margin-top:2px">${K(paidAmt)} paid · ${K(owing)} left</div>
             </div>`:''}
           </td>
-          <td class="amt">${K(i.amount)}</td>
+          <td class="amt"><input type="number" value="${i.amount}" onchange="editAmt('${i.id}',this.value)" style="width:85px;border:1px solid transparent;background:none;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;text-align:right;padding:4px 6px;border-radius:4px;outline:none" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'" inputmode="numeric"/></td>
           <td class="status">
             <select onchange="setSt('${i.id}',this.value)" style="border:none;background:none;font-size:11px;font-weight:700;cursor:pointer;color:${stColor}">
               <option value="paid" ${i.status==='paid'?'selected':''}>✓ Paid</option>
@@ -1125,6 +1136,45 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
         }
       });
       h+=`<tr class="b-total"><td>Total Expenses</td><td class="amt">${K(t.all)}</td><td></td><td></td></tr></tbody></table>`;
+
+      // ── INCOME SOURCES ──
+      h+=`<div style="margin-top:20px;padding-top:16px;border-top:2px solid var(--border)">
+        <div style="font-size:14px;font-weight:700;color:var(--slate);margin-bottom:10px">Income Sources</div>`;
+
+      if(data.incomeSources&&data.incomeSources.length>0){
+        h+=`<table class="b-table"><thead><tr><th>Source</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th><th></th></tr></thead><tbody>`;
+        data.incomeSources.forEach(s=>{
+          const clr=s.status==='received'?'var(--green)':'var(--blue)';
+          h+=`<tr>
+            <td>${esc(s.name)}</td>
+            <td class="amt"><input type="number" value="${s.amount}" onchange="editIncAmt('${s.id}',this.value)" style="width:85px;border:1px solid transparent;background:none;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;text-align:right;padding:4px 6px;border-radius:4px;outline:none" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'" inputmode="numeric"/></td>
+            <td class="status">
+              <select onchange="setIncSt('${s.id}',this.value)" style="border:none;background:none;font-size:11px;font-weight:700;cursor:pointer;color:${clr}">
+                <option value="received" ${s.status==='received'?'selected':''}>✓ Received</option>
+                <option value="expected" ${s.status==='expected'?'selected':''}>⏳ Expected</option>
+              </select>
+            </td>
+            <td><button class="del" onclick="delInc('${s.id}')">✕</button></td>
+          </tr>`;
+        });
+        h+=`<tr class="b-total"><td>Total Income</td><td class="amt">${K(t.incTotal)}</td><td></td><td></td></tr>`;
+        if(t.incReceived>0&&t.incExpected>0){
+          h+=`<tr><td style="font-size:11px;color:var(--green)">Received</td><td class="amt" style="font-size:11px;color:var(--green)">${K(t.incReceived)}</td><td></td><td></td></tr>`;
+          h+=`<tr><td style="font-size:11px;color:var(--blue)">Expected</td><td class="amt" style="font-size:11px;color:var(--blue)">${K(t.incExpected)}</td><td></td><td></td></tr>`;
+        }
+        h+=`</tbody></table>`;
+      } else if(data.income>0){
+        h+=`<div style="font-size:13px;color:var(--text-mid);margin-bottom:10px">Flat income: ${K(data.income)} (from your parsed budget). Add sources below for better tracking.</div>`;
+      }
+
+      h+=`<div style="margin-top:10px"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px">Add income source</div>
+        <div class="edit-row">
+          <input type="text" id="inc-name" placeholder="e.g. Salary, Freelance"/>
+          <input type="number" id="inc-amt" placeholder="Amount" style="width:100px" inputmode="numeric"/>
+          <select id="inc-st" style="width:100px"><option value="received">Received</option><option value="expected">Expected</option></select>
+          <button class="btn primary sm" onclick="addInc()">+</button>
+        </div>
+      </div></div>`;
 
       h+=`<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px">Add an item</div>
         <div class="edit-row">
@@ -1671,6 +1721,46 @@ window.setPaidAmt=function(id,val){
 };
 
 window.delIt=function(id){data.items=data.items.filter(i=>i.id!==id);save();render();track('item_deleted');};
+
+window.editAmt=function(id,val){
+  const i=data.items.find(x=>x.id===id);
+  if(!i)return;
+  const newAmt=Math.abs(Number(val))||i.amount;
+  i.amount=newAmt;
+  if(i.status==='partial'&&i.paidAmount>=newAmt){i.status='paid';i.paidAmount=newAmt;}
+  save();render();
+};
+
+window.addInc=function(){
+  const name=$('#inc-name').value.trim();
+  const amt=Number($('#inc-amt').value);
+  const st=$('#inc-st').value;
+  if(!name||!amt){toast('Enter source name and amount');return;}
+  if(!data.incomeSources) data.incomeSources=[];
+  data.incomeSources.push({id:uid(),name,amount:Math.abs(amt),status:st});
+  // Update flat income to match sources total
+  data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
+  save();render();toast(`Added ${name}`);track('income_added');
+};
+
+window.delInc=function(id){
+  data.incomeSources=data.incomeSources.filter(s=>s.id!==id);
+  data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
+  save();render();
+};
+
+window.setIncSt=function(id,st){
+  const s=data.incomeSources.find(x=>x.id===id);
+  if(s){s.status=st;save();render();track('income_status_changed',{status:st});}
+};
+
+window.editIncAmt=function(id,val){
+  const s=data.incomeSources.find(x=>x.id===id);
+  if(!s)return;
+  s.amount=Math.abs(Number(val))||s.amount;
+  data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
+  save();render();
+};
 
 window.addIt=function(){
   const name=$('#add-name').value.trim();
