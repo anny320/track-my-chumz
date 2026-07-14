@@ -664,16 +664,28 @@ function archiveMonth(d){
   let hist=[];
   try{ const h=localStorage.getItem('ba4-history'); if(h){ try{hist=JSON.parse(h);}catch(e){/* encrypted, handle later */} } }catch(e){}
   const t=d.items.reduce((s,i)=>s+i.amount,0);
-  const paid=d.items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0);
+  const paidFull=d.items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0);
+  const partialPaid=d.items.filter(i=>i.status==='partial').reduce((s,i)=>s+(i.paidAmount||0),0);
+  const paid=paidFull+partialPaid;
+  const srcs=d.incomeSources||[];
+  const incReceived=srcs.filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0)
+    +srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.receivedAmount||0),0);
+  const incPending=srcs.filter(s=>s.status==='pending').reduce((s,i)=>s+i.amount,0)
+    +srcs.filter(s=>s.status==='partial').reduce((s,i)=>s+(i.amount-(i.receivedAmount||0)),0);
+  const effectiveIncome=srcs.length>0?incReceived+incPending:d.income;
+
   hist.push({
     month:d.month,
-    income:d.income,
+    income:effectiveIncome,
+    incomeReceived:incReceived,
+    incomePending:incPending,
     balance:d.balance,
     totalExpenses:t,
     totalPaid:paid,
-    remaining:d.income-t,
+    remaining:effectiveIncome-t,
     itemCount:d.items.length,
-    items:d.items.map(i=>({name:i.name,amount:i.amount,status:i.status})),
+    items:d.items.map(i=>({name:i.name,amount:i.amount,status:i.status,paidAmount:i.paidAmount||null})),
+    incomeSources:srcs.map(s=>({name:s.name,description:s.description||'',amount:s.amount,status:s.status,receivedAmount:s.receivedAmount||0})),
     archivedAt:new Date().toISOString()
   });
   if(hist.length>12) hist=hist.slice(-12);
@@ -879,15 +891,40 @@ function remDate(d){const x=new Date(now);x.setDate(x.getDate()+d);return x.toIS
 
 function exportCSV(){
   const t=totals();
-  let c='Item,Amount (KES),Status\n';
-  c+=`Income,${data.income},—\n`;
-  if(data.balance!==null) c+=`Opening Balance,${data.balance},—\n`;
-  c+='\n';
-  data.items.forEach(i=>{c+=`"${i.name.replace(/"/g,'""')}",${i.amount},${i.status}\n`});
-  c+=`\nTotal Expenses,${t.all},—\n`;
-  c+=`Total Paid,${t.paid},—\n`;
-  c+=`Total Unpaid,${t.unpaid},—\n`;
-  c+=`Remaining,${t.remaining},—\n`;
+  const cur=(loadProfile().currency||'KES');
+  let c=`Track my Chumz - ${monthLabel}\n\n`;
+
+  // Income sources
+  c+=`INCOME\nSource,Amount (${cur}),Status,Received,Pending,Description\n`;
+  const srcs=data.incomeSources||[];
+  if(srcs.length>0){
+    srcs.forEach(s=>{
+      const rcv=s.status==='received'?s.amount:s.status==='partial'?(s.receivedAmount||0):0;
+      const pnd=s.status==='pending'?s.amount:s.status==='partial'?(s.amount-(s.receivedAmount||0)):0;
+      c+=`"${s.name.replace(/"/g,'""')}",${s.amount},${s.status},${rcv},${pnd},"${(s.description||'').replace(/"/g,'""')}"\n`;
+    });
+    c+=`Total Income,${t.incTotal},—,${t.incReceived},${t.incExpected},—\n`;
+  } else {
+    c+=`Total Income,${data.income},received,${data.income},0,—\n`;
+  }
+
+  // Expenses
+  c+=`\nEXPENSES\nItem,Amount (${cur}),Status,Paid Amount,Still Owed\n`;
+  data.items.forEach(i=>{
+    const pa=i.status==='paid'?i.amount:i.status==='partial'?(i.paidAmount||0):0;
+    const ow=i.amount-pa;
+    c+=`"${i.name.replace(/"/g,'""')}",${i.amount},${i.status},${pa},${ow}\n`;
+  });
+
+  // Summary
+  c+=`\nSUMMARY\n`;
+  c+=`Total Income,${t.incTotal}\n`;
+  c+=`Total Expenses,${t.all}\n`;
+  c+=`Total Paid (bills),${t.paid}\n`;
+  c+=`Still Due,${t.stillDue}\n`;
+  c+=`Remaining (income - expenses),${t.remaining}\n`;
+  if(data.balance!==null) c+=`Opening Balance,${data.balance}\n`;
+
   const blob=new Blob([c],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`chumz-${curMonth}.csv`;a.click();
@@ -898,12 +935,32 @@ function exportCSV(){
 
 function copyTSV(){
   const t=totals();
-  let tsv='Item\tAmount (KES)\tStatus\n';
-  tsv+=`Income\t${data.income}\t—\n`;
-  if(data.balance!==null) tsv+=`Opening Balance\t${data.balance}\t—\n`;
-  data.items.forEach(i=>{tsv+=`${i.name}\t${i.amount}\t${i.status}\n`});
-  tsv+=`\nTotal Expenses\t${t.all}\t—\n`;
-  tsv+=`Remaining\t${t.remaining}\t—\n`;
+  const cur=(loadProfile().currency||'KES');
+  let tsv=`Track my Chumz — ${monthLabel}\n\n`;
+
+  // Income
+  tsv+=`INCOME\nSource\tAmount (${cur})\tStatus\tReceived\tPending\n`;
+  const srcs=data.incomeSources||[];
+  if(srcs.length>0){
+    srcs.forEach(s=>{
+      const rcv=s.status==='received'?s.amount:s.status==='partial'?(s.receivedAmount||0):0;
+      const pnd=s.status==='pending'?s.amount:s.status==='partial'?(s.amount-(s.receivedAmount||0)):0;
+      tsv+=`${s.name}\t${s.amount}\t${s.status}\t${rcv}\t${pnd}\n`;
+    });
+    tsv+=`Total Income\t${t.incTotal}\t—\t${t.incReceived}\t${t.incExpected}\n`;
+  } else {
+    tsv+=`Income\t${data.income}\treceived\t${data.income}\t0\n`;
+  }
+
+  // Expenses
+  tsv+=`\nEXPENSES\nItem\tAmount (${cur})\tStatus\tPaid\tOwed\n`;
+  data.items.forEach(i=>{
+    const pa=i.status==='paid'?i.amount:i.status==='partial'?(i.paidAmount||0):0;
+    tsv+=`${i.name}\t${i.amount}\t${i.status}\t${pa}\t${i.amount-pa}\n`;
+  });
+
+  tsv+=`\nTotal Expenses\t${t.all}\nTotal Paid\t${t.paid}\nStill Due\t${t.stillDue}\nRemaining\t${t.remaining}\n`;
+
   navigator.clipboard.writeText(tsv).then(()=>{toast('Copied — paste into Google Sheets');track('export_clipboard');});
 }
 
@@ -1580,28 +1637,53 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       [...hist].reverse().forEach(m=>{
         const pctUsed=m.income>0?Math.round((m.totalExpenses/m.income)*100):0;
         const color=m.remaining<0?'var(--red)':m.remaining<m.income*.1?'var(--amber)':'var(--green)';
+        const hasIncSrcs=m.incomeSources&&m.incomeSources.length>0;
+        const incRcvd=m.incomeReceived||m.income;
+        const incPend=m.incomePending||0;
+
         h+=`<div class="card" style="margin-bottom:12px;padding:16px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
             <div style="font-size:15px;font-weight:700;color:var(--slate)">${monthLabel2(m.month)}</div>
             <div style="font-size:12px;font-weight:600;color:${color}">${m.remaining>=0?'+':''}${K(m.remaining)}</div>
           </div>
-          <div style="display:flex;gap:16px;font-size:12px;color:var(--text-mid);margin-bottom:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:12px;font-size:12px;color:var(--text-mid);margin-bottom:10px;flex-wrap:wrap">
             <div><span style="color:var(--text-light)">Income</span> <strong>${K(m.income)}</strong></div>
-            <div><span style="color:var(--text-light)">Spent</span> <strong>${K(m.totalExpenses)}</strong></div>
-            <div><span style="color:var(--text-light)">Paid</span> <strong>${K(m.totalPaid)}</strong></div>
-            <div><span style="color:var(--text-light)">Items</span> <strong>${m.itemCount}</strong></div>
+            <div><span style="color:var(--text-light)">Expenses</span> <strong>${K(m.totalExpenses)}</strong></div>
+            <div><span style="color:var(--text-light)">Paid</span> <strong style="color:var(--green)">${K(m.totalPaid)}</strong></div>
           </div>
+          ${hasIncSrcs&&incPend>0?`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:11px">
+            <span style="color:var(--green)">✓ Received: ${K(incRcvd)}</span>
+            <span style="color:var(--blue)">⏳ Pending: ${K(incPend)}</span>
+          </div>`:''}
           <div style="height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden;margin-bottom:6px">
             <div style="height:100%;width:${Math.min(pctUsed,100)}%;background:${color};border-radius:3px"></div>
           </div>
           <div style="font-size:11px;color:var(--text-light)">${pctUsed}% of income used</div>`;
 
-        h+=`<details style="margin-top:10px"><summary style="font-size:12px;color:var(--blue);cursor:pointer;font-weight:600">View ${m.itemCount} items</summary>
+        // Income sources detail
+        if(hasIncSrcs){
+          h+=`<details style="margin-top:10px"><summary style="font-size:12px;color:var(--green);cursor:pointer;font-weight:600">💵 ${m.incomeSources.length} income source${m.incomeSources.length>1?'s':''}</summary>
+            <table class="b-table" style="margin-top:8px;font-size:12px">
+              <thead><tr><th>Source</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th></tr></thead><tbody>`;
+          m.incomeSources.forEach(s=>{
+            const clr=s.status==='received'?'var(--green)':s.status==='pending'?'var(--blue)':'var(--amber)';
+            const label=s.status==='received'?'✓ Received':s.status==='pending'?'⏳ Pending':`◐ ${K(s.receivedAmount||0)} rcvd`;
+            h+=`<tr><td>${esc(s.name)}${s.description?`<div style="font-size:10px;color:var(--text-light)">${esc(s.description)}</div>`:''}</td><td class="amt">${K(s.amount)}</td>
+              <td style="text-align:center;font-size:11px;font-weight:600;color:${clr}">${label}</td></tr>`;
+          });
+          h+=`</tbody></table></details>`;
+        }
+
+        // Expense items
+        h+=`<details style="margin-top:8px"><summary style="font-size:12px;color:var(--blue);cursor:pointer;font-weight:600">📋 ${m.itemCount} expense${m.itemCount>1?'s':''}</summary>
           <table class="b-table" style="margin-top:8px;font-size:12px">
             <thead><tr><th>Item</th><th style="text-align:right">Amount</th><th style="text-align:center">Status</th></tr></thead><tbody>`;
         m.items.forEach(i=>{
+          const isPartial=i.status==='partial';
+          const clr=i.status==='paid'?'var(--green)':i.status==='unpaid'?'var(--red)':isPartial?'var(--amber)':'#92400E';
+          const label=i.status==='paid'?'✓ Paid':i.status==='unpaid'?'✗ Unpaid':isPartial?`◐ ${K(i.paidAmount||0)} paid`:'? Maybe';
           h+=`<tr><td>${esc(i.name)}</td><td class="amt">${K(i.amount)}</td>
-            <td style="text-align:center;font-size:11px;font-weight:600;color:${i.status==='paid'?'var(--green)':i.status==='unpaid'?'var(--red)':'#92400E'}">${i.status==='paid'?'✓ Paid':i.status==='unpaid'?'✗ Unpaid':'? Maybe'}</td></tr>`;
+            <td style="text-align:center;font-size:11px;font-weight:600;color:${clr}">${label}</td></tr>`;
         });
         h+=`</tbody></table></details>`;
 
@@ -1934,14 +2016,15 @@ window.reuseBudget=function(month){
   const hist=getHistory();
   const m=hist.find(h=>h.month===month);
   if(!m){toast('Month not found');return}
-  data.items=m.items.map(i=>({id:uid(),name:i.name,amount:i.amount,status:'unpaid'}));
+  data.items=m.items.map(i=>({id:uid(),name:i.name,amount:i.amount,status:'unpaid',paidAmount:0}));
   data.income=m.income;
+  data.incomeSources=(m.incomeSources||[]).map(s=>({id:uid(),name:s.name,description:s.description||'',amount:s.amount,status:'pending',receivedAmount:0}));
   data.balance=null;
   data.rawInput='';
   data.month=curMonth;
   showRollover=false;
   save();view='overview';render();
-  toast(`Loaded ${m.items.length} items from ${monthLabel2(month)}`);
+  toast(`Loaded ${m.items.length} items + ${(m.incomeSources||[]).length} income sources from ${monthLabel2(month)}`);
   track('budget_reused',{source_month:month,items:m.items.length});
 };
 
