@@ -635,8 +635,8 @@ function load(){
       }
     }
   }catch(e){}
-  if(!data) data={month:curMonth,income:0,incomeSources:[],balance:null,items:[],rawInput:'',history:[]};
-  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];
+  if(!data) data={month:curMonth,income:0,incomeSources:[],investments:[],balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];if(!data.investments) data.investments=[];
 }
 
 async function loadEncrypted(){
@@ -656,8 +656,8 @@ async function loadEncrypted(){
       if(data.items&&data.items.length>0) view='overview';
     }
   }catch(e){}
-  if(!data) data={month:curMonth,income:0,incomeSources:[],balance:null,items:[],rawInput:'',history:[]};
-  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];
+  if(!data) data={month:curMonth,income:0,incomeSources:[],investments:[],balance:null,items:[],rawInput:'',history:[]};
+  if(!data.history) data.history=[];if(!data.incomeSources) data.incomeSources=[];if(!data.investments) data.investments=[];
 }
 
 function archiveMonth(d){
@@ -686,6 +686,8 @@ function archiveMonth(d){
     itemCount:d.items.length,
     items:d.items.map(i=>({name:i.name,amount:i.amount,status:i.status,paidAmount:i.paidAmount||null})),
     incomeSources:srcs.map(s=>({name:s.name,description:s.description||'',amount:s.amount,status:s.status,receivedAmount:s.receivedAmount||0})),
+    investments:(d.investments||[]).map(i=>({name:i.name,note:i.note||'',amount:i.amount,type:i.type,date:i.date||''})),
+    totalInvested:(d.investments||[]).reduce((s,i)=>s+i.amount,0),
     archivedAt:new Date().toISOString()
   });
   if(hist.length>12) hist=hist.slice(-12);
@@ -925,6 +927,17 @@ function exportCSV(){
   c+=`Remaining (income - expenses),${t.remaining}\n`;
   if(data.balance!==null) c+=`Opening Balance,${data.balance}\n`;
 
+  // Investments
+  const inv=data.investments||[];
+  if(inv.length>0){
+    const invTotal=inv.reduce((s,i)=>s+i.amount,0);
+    c+=`\nINVESTMENTS & SAVINGS\nName,Amount (${cur}),Type,Date,Note\n`;
+    inv.forEach(i=>{
+      c+=`"${i.name.replace(/"/g,'""')}",${i.amount},${i.type},${i.date||''},"${(i.note||'').replace(/"/g,'""')}"\n`;
+    });
+    c+=`Total Invested,${invTotal}\n`;
+  }
+
   const blob=new Blob([c],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`chumz-${curMonth}.csv`;a.click();
@@ -960,6 +973,14 @@ function copyTSV(){
   });
 
   tsv+=`\nTotal Expenses\t${t.all}\nTotal Paid\t${t.paid}\nStill Due\t${t.stillDue}\nRemaining\t${t.remaining}\n`;
+
+  const inv=data.investments||[];
+  if(inv.length>0){
+    const invTotal=inv.reduce((s,i)=>s+i.amount,0);
+    tsv+=`\nINVESTMENTS & SAVINGS\nName\tAmount (${cur})\tType\tDate\n`;
+    inv.forEach(i=>{tsv+=`${i.name}\t${i.amount}\t${i.type}\t${i.date||''}\n`;});
+    tsv+=`Total Invested\t${invTotal}\n`;
+  }
 
   navigator.clipboard.writeText(tsv).then(()=>{toast('Copied — paste into Google Sheets');track('export_clipboard');});
 }
@@ -1368,6 +1389,106 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
     if(data.income>0&&srcs.length===0){
       h+=`<div class="insight tip" style="margin-top:12px"><div class="i-title">💡 You have a flat income of ${K(data.income)}</div><div class="i-body">This was parsed from your budget input. Add it as an income source above for better tracking — you'll be able to mark it as received, partial, or pending.</div></div>`;
     }
+
+    // ═══════════════════════════════════
+    // INVESTMENTS & SAVINGS SECTION
+    // ═══════════════════════════════════
+    const inv=data.investments||[];
+    const invTotal=inv.reduce((s,i)=>s+i.amount,0);
+    const invByType={};
+    inv.forEach(i=>{
+      if(!invByType[i.type]) invByType[i.type]={total:0,items:[]};
+      invByType[i.type].total+=i.amount;
+      invByType[i.type].items.push(i);
+    });
+
+    const typeLabels={shares:'Shares',stocks:'Stocks',etf:'ETFs',sacco:'SACCO',mmf:'Money Market Fund',tBill:'T-Bill/Bond',crypto:'Crypto',pension:'Pension/NSSF',chama:'Chama',property:'Property',other:'Other'};
+    const typeIcons={shares:'📈',stocks:'📊',etf:'🏦',sacco:'🏛',mmf:'💹',tBill:'🏛',crypto:'🪙',pension:'🔐',chama:'🤝',property:'🏠',other:'📌'};
+
+    h+=`<div style="margin-top:28px;padding-top:20px;border-top:2px solid var(--border)">
+      <div style="font-size:15px;font-weight:700;color:var(--slate);margin-bottom:4px">📈 Investments & Savings</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:14px">Track money you're putting to work — shares, SACCO, ETFs, money market funds. This isn't spending, it's building.</div>`;
+
+    if(inv.length>0){
+      // Summary cards
+      h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:120px;background:var(--green-soft);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--green)">${K(invTotal)}</div>
+          <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Total Invested This Month</div>
+        </div>
+      </div>`;
+
+      // By type breakdown
+      const types=Object.keys(invByType).sort((a,b)=>invByType[b].total-invByType[a].total);
+      types.forEach(type=>{
+        const group=invByType[type];
+        const icon=typeIcons[type]||'📌';
+        const label=typeLabels[type]||type;
+
+        h+=`<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:700;color:var(--slate)">${icon} ${label}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--green)">${K(group.total)}</div>
+          </div>`;
+
+        group.items.forEach(item=>{
+          h+=`<div class="card" style="padding:10px 14px;margin-bottom:4px;border-left:3px solid var(--green)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--slate)">${esc(item.name)}</div>
+                ${item.note?`<div style="font-size:11px;color:var(--text-light);margin-top:2px">${esc(item.note)}</div>`:''}
+                ${item.date?`<div style="font-size:10px;color:var(--text-light);margin-top:2px">${item.date}</div>`:''}
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--green)">
+                  <input type="number" value="${item.amount}" onchange="editInvAmt('${item.id}',this.value)" style="width:90px;border:1px solid transparent;background:none;font-family:'DM Mono',monospace;font-size:14px;font-weight:600;text-align:right;padding:2px 4px;border-radius:4px;outline:none;color:var(--green)" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'" inputmode="numeric"/>
+                </div>
+                <button onclick="delInv('${item.id}')" style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:12px;padding:2px">✕</button>
+              </div>
+            </div>
+          </div>`;
+        });
+        h+=`</div>`;
+      });
+
+      // Savings rate
+      const effInc=srcs.length>0?(srcs.reduce((s,i)=>s+i.amount,0)):data.income;
+      if(effInc>0){
+        const savRate=Math.round((invTotal/effInc)*100);
+        const clr=savRate>=20?'var(--green)':savRate>=10?'var(--amber)':'var(--red)';
+        h+=`<div class="insight ${savRate>=20?'ok':savRate>=10?'tip':'warn'}">
+          <div class="i-title">💰 Savings/Investment rate: ${savRate}%</div>
+          <div class="i-body">${K(invTotal)} invested out of ${K(effInc)} income. ${savRate>=20?'Excellent — you\'re building wealth.':savRate>=10?'Good start. Aim for 20%+ to build real momentum.':'Below 10%. Try to increase this — even small regular investments compound significantly over time.'}</div>
+        </div>`;
+      }
+    }
+
+    // Add investment form
+    h+=`<div style="margin-top:14px;padding:14px;background:#fff;border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--slate);margin-bottom:8px">Add Investment/Savings</div>
+      <input class="inp" type="text" id="inv-name" placeholder="Name (e.g. NCBA shares, Cytonn MMF)" style="margin-bottom:6px"/>
+      <input class="inp" type="text" id="inv-note" placeholder="Note (e.g. 50 shares @ KES 42)" style="margin-bottom:6px"/>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input class="inp" type="number" id="inv-amt" placeholder="Amount" inputmode="numeric" style="flex:1"/>
+        <select class="inp" id="inv-type" style="flex:1">
+          <option value="shares">📈 Shares</option>
+          <option value="stocks">📊 Stocks</option>
+          <option value="etf">🏦 ETFs</option>
+          <option value="sacco">🏛 SACCO</option>
+          <option value="mmf">💹 Money Market</option>
+          <option value="tBill">🏛 T-Bill/Bond</option>
+          <option value="chama">🤝 Chama</option>
+          <option value="pension">🔐 Pension/NSSF</option>
+          <option value="crypto">🪙 Crypto</option>
+          <option value="property">🏠 Property</option>
+          <option value="other">📌 Other</option>
+        </select>
+      </div>
+      <input class="inp" type="date" id="inv-date" value="${now.toISOString().slice(0,10)}" style="margin-bottom:8px"/>
+      <button class="btn primary" onclick="addInv()">Add Investment</button>
+    </div>`;
+
+    h+=`</div>`;
   }
 
 
@@ -1589,12 +1710,13 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       const years={};
       hist.forEach(m=>{
         const y=m.month.split('-')[0];
-        if(!years[y]) years[y]={months:[],totIncome:0,totExpenses:0,totPaid:0,totRemaining:0};
+        if(!years[y]) years[y]={months:[],totIncome:0,totExpenses:0,totPaid:0,totRemaining:0,totInvested:0};
         years[y].months.push(m);
         years[y].totIncome+=m.income;
         years[y].totExpenses+=m.totalExpenses;
         years[y].totPaid+=m.totalPaid;
         years[y].totRemaining+=m.remaining;
+        years[y].totInvested+=(m.totalInvested||0);
       });
 
       Object.keys(years).sort().reverse().forEach(yr=>{
@@ -1635,13 +1757,13 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
               <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${y.totExpenses>y.totIncome?'var(--red)':'var(--slate)'}">${K(y.totExpenses)}</div>
               <div style="font-size:11px;color:var(--text-light);margin-top:2px">Total Expenses</div>
             </div>
+            <div style="background:var(--green-soft);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${K(y.totInvested)}</div>
+              <div style="font-size:11px;color:var(--green);margin-top:2px">Total Invested</div>
+            </div>
             <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
               <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${savRate>=20?'var(--green)':savRate>=10?'var(--amber)':'var(--red)'}">${savRate}%</div>
               <div style="font-size:11px;color:var(--text-light);margin-top:2px">Savings Rate</div>
-            </div>
-            <div style="background:var(--off-white);border-radius:8px;padding:12px;text-align:center">
-              <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--slate)">${K(avgExp)}</div>
-              <div style="font-size:11px;color:var(--text-light);margin-top:2px">Avg Monthly Spend</div>
             </div>
           </div>
 
@@ -1757,6 +1879,19 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
             <td style="text-align:center;font-size:11px;font-weight:600;color:${clr}">${label}</td></tr>`;
         });
         h+=`</tbody></table></details>`;
+
+        // Investments in archive
+        const archInv=m.investments||[];
+        if(archInv.length>0){
+          const archInvTotal=archInv.reduce((s,i)=>s+i.amount,0);
+          h+=`<details style="margin-top:8px"><summary style="font-size:12px;color:var(--green);cursor:pointer;font-weight:600">📈 ${archInv.length} investment${archInv.length>1?'s':''} — ${K(archInvTotal)}</summary>
+            <table class="b-table" style="margin-top:8px;font-size:12px">
+              <thead><tr><th>Name</th><th style="text-align:right">Amount</th><th>Type</th></tr></thead><tbody>`;
+          archInv.forEach(i=>{
+            h+=`<tr><td>${esc(i.name)}${i.note?`<div style="font-size:10px;color:var(--text-light)">${esc(i.note)}</div>`:''}</td><td class="amt">${K(i.amount)}</td><td style="font-size:11px;color:var(--text-light)">${i.type}</td></tr>`;
+          });
+          h+=`</tbody></table></details>`;
+        }
 
         h+=`<button class="btn outline sm" style="margin-top:10px;font-size:12px" onclick="reuseBudget('${m.month}')">♻️ Reuse this month's structure</button>`;
         h+=`</div>`;
@@ -2081,7 +2216,7 @@ window.addInc=function(){
   const amt=Number($('#inc-amt').value);
   const st=$('#inc-st').value;
   if(!name||!amt){toast('Enter source name and amount');return;}
-  if(!data.incomeSources) data.incomeSources=[];
+  if(!data.incomeSources) data.incomeSources=[];if(!data.investments) data.investments=[];
   const src={id:uid(),name,description:desc,amount:Math.abs(amt),status:st,receivedAmount:st==='received'?Math.abs(amt):0};
   data.incomeSources.push(src);
   data.income=data.incomeSources.reduce((s,i)=>s+i.amount,0);
@@ -2129,6 +2264,31 @@ window.editIncDesc=function(id){
   if(!s)return;
   const desc=prompt('Description:',s.description||'');
   if(desc!==null){s.description=desc;save();render();}
+};
+
+// Investments
+window.addInv=function(){
+  const name=$('#inv-name').value.trim();
+  const note=$('#inv-note')?.value?.trim()||'';
+  const amt=Number($('#inv-amt').value);
+  const type=$('#inv-type').value;
+  const date=$('#inv-date')?.value||now.toISOString().slice(0,10);
+  if(!name||!amt){toast('Enter name and amount');return;}
+  if(!data.investments) data.investments=[];
+  data.investments.push({id:uid(),name,note,amount:Math.abs(amt),type,date});
+  save();render();toast(`Added ${name}`);track('investment_added',{type});
+};
+
+window.delInv=function(id){
+  data.investments=data.investments.filter(i=>i.id!==id);
+  save();render();
+};
+
+window.editInvAmt=function(id,val){
+  const i=data.investments.find(x=>x.id===id);
+  if(!i)return;
+  i.amount=Math.abs(Number(val))||i.amount;
+  save();render();
 };
 
 window.addIt=function(){
