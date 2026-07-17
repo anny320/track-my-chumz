@@ -1489,6 +1489,77 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
     if(hasSelections){
       h+=`<button class="btn outline" style="margin-top:12px" onclick="clearHiddenSelections()">🔄 Redo Check-Up</button>`;
     }
+
+    // ── CUSTOM CHECK-UP ITEMS ──
+    const customLeaks=profile.customLeaks||[];
+    const freqLabels={daily:'Daily',weekly:'Weekly',biweekly:'Every 2 weeks',monthly:'Monthly',quarterly:'Quarterly',yearly:'Yearly',onetime:'One-time'};
+
+    h+=`<div style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border)">
+      <div style="font-size:14px;font-weight:700;color:var(--slate);margin-bottom:4px">Your Custom Expenses</div>
+      <div style="font-size:12px;color:var(--text-light);margin-bottom:12px">Track spending that's unique to you — parking, takeaway, church offering, loan repayments, whatever applies.</div>`;
+
+    if(customLeaks.length>0){
+      let customMonthly=0;
+      customLeaks.forEach((cl,idx)=>{
+        const mo=toMonthly(cl.amount,cl.frequency);
+        customMonthly+=mo;
+        const freqBadge=freqLabels[cl.frequency]||cl.frequency;
+        h+=`<div class="card" style="padding:12px;margin-bottom:6px;border-left:3px solid var(--amber)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600;color:var(--slate)">${esc(cl.name)}</div>
+              ${cl.note?`<div style="font-size:11px;color:var(--text-light);margin-top:2px">${esc(cl.note)}</div>`:''}
+              <div style="font-size:11px;color:var(--text-mid);margin-top:3px">
+                <span style="background:var(--amber-soft);padding:2px 6px;border-radius:4px;font-weight:600;font-size:10px;color:#92400E">${freqBadge}</span>
+                <span style="margin-left:6px">${K(cl.amount)} × ${freqToLabel(cl.frequency)}</span>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--amber)">${K(mo)}<span style="font-size:10px;font-weight:400;color:var(--text-light)">/mo</span></div>
+              <button onclick="delCustomLeak(${idx})" style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:12px;margin-top:4px">remove</button>
+            </div>
+          </div>
+        </div>`;
+      });
+
+      h+=`<div class="card" style="padding:14px;margin-top:8px;border:2px solid var(--amber);background:var(--amber-soft)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#92400E">Your custom expenses total</div>
+            <div style="font-size:11px;color:#92400E;margin-top:2px">${customLeaks.length} item${customLeaks.length>1?'s':''} · ${K(customMonthly*12)}/year</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#92400E">${K(customMonthly)}<span style="font-size:11px;font-weight:400">/mo</span></div>
+        </div>
+      </div>`;
+
+      // Combined total with pre-set selections
+      const presetTotal=myLeaks.reduce((s,id)=>{const l=LEAKS.find(x=>x.id===id);return s+(l?l.mo:0);},0);
+      if(presetTotal>0){
+        const grandTotal=presetTotal+customMonthly;
+        h+=`<div class="insight warn" style="margin-top:12px"><div class="i-title">🧮 Combined hidden drain: up to ${K(grandTotal)}/month</div><div class="i-body">Pre-set items (~${K(presetTotal)}) + your custom items (${K(customMonthly)}) = up to <strong>${K(grandTotal*12)}/year</strong>. Even cutting 30% saves ${K(Math.round(grandTotal*.3))}/month.</div></div>`;
+      }
+    }
+
+    // Add custom item form
+    h+=`<div style="margin-top:14px;padding:14px;background:#fff;border-radius:10px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--slate);margin-bottom:8px">Add a custom expense</div>
+      <input class="inp" type="text" id="cl-name" placeholder="What do you spend on? (e.g. Parking)" style="margin-bottom:6px"/>
+      <input class="inp" type="text" id="cl-note" placeholder="Note (optional — e.g. CBD parking Mon-Fri)" style="margin-bottom:6px"/>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input class="inp" type="number" id="cl-amt" placeholder="Amount" inputmode="numeric" style="flex:1"/>
+        <select class="inp" id="cl-freq" style="flex:1">
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+          <option value="onetime">One-time</option>
+        </select>
+      </div>
+      <div id="cl-preview" style="margin-bottom:8px"></div>
+      <button class="btn primary" onclick="addCustomLeak()">Add to Check-Up</button>
+    </div></div>`;
   }
 
 
@@ -1811,6 +1882,27 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   $('#app').innerHTML=h;
   if(view==='input'){const ta=$('#raw-input');if(ta&&!data.rawInput)ta.focus();}
+
+  // Custom leak preview
+  if(view==='hidden'){
+    const prevFn=()=>{
+      const amt=Number($('#cl-amt')?.value)||0;
+      const freq=$('#cl-freq')?.value||'monthly';
+      const el=$('#cl-preview');
+      if(!el)return;
+      if(amt>0){
+        const mo=toMonthly(amt,freq);
+        const yr=mo*12;
+        el.innerHTML=freq==='onetime'
+          ?`<div style="font-size:12px;color:var(--text-mid);padding:8px;background:var(--off-white);border-radius:6px">One-time expense of <strong>${K(amt)}</strong> — won't recur monthly.</div>`
+          :`<div style="font-size:12px;color:var(--amber);padding:8px;background:var(--amber-soft);border-radius:6px">= <strong>${K(mo)}/month</strong> · ${K(yr)}/year</div>`;
+      } else {
+        el.innerHTML='';
+      }
+    };
+    $('#cl-amt')?.addEventListener('input',prevFn);
+    $('#cl-freq')?.addEventListener('change',prevFn);
+  }
 }
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1852,6 +1944,56 @@ window.clearHiddenSelections=function(){
   p.myLeaks=[];
   saveProfile(p);
   toast('Selections cleared — redo your check-up');
+  render();
+};
+
+// Frequency helpers
+function toMonthly(amount,freq){
+  const n=Number(amount)||0;
+  switch(freq){
+    case 'daily':return Math.round(n*30);
+    case 'weekly':return Math.round(n*4.33);
+    case 'biweekly':return Math.round(n*2.17);
+    case 'monthly':return n;
+    case 'quarterly':return Math.round(n/3);
+    case 'yearly':return Math.round(n/12);
+    case 'onetime':return 0; // one-time doesn't recur
+    default:return n;
+  }
+}
+function freqToLabel(freq){
+  switch(freq){
+    case 'daily':return '~30 days';
+    case 'weekly':return '~4.3 weeks';
+    case 'biweekly':return '~2.2 times';
+    case 'monthly':return 'per month';
+    case 'quarterly':return '÷ 3 months';
+    case 'yearly':return '÷ 12 months';
+    case 'onetime':return 'once';
+    default:return '';
+  }
+}
+
+window.addCustomLeak=function(){
+  const name=$('#cl-name').value.trim();
+  const note=$('#cl-note')?.value?.trim()||'';
+  const amt=Number($('#cl-amt').value);
+  const freq=$('#cl-freq').value;
+  if(!name||!amt){toast('Enter name and amount');return;}
+  const p=loadProfile();
+  if(!p.customLeaks) p.customLeaks=[];
+  p.customLeaks.push({name,note,amount:Math.abs(amt),frequency:freq});
+  saveProfile(p);
+  toast(`Added ${name}`);
+  track('custom_leak_added',{frequency:freq});
+  render();
+};
+
+window.delCustomLeak=function(idx){
+  const p=loadProfile();
+  if(!p.customLeaks) return;
+  p.customLeaks.splice(idx,1);
+  saveProfile(p);
   render();
 };
 
