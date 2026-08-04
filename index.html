@@ -1182,35 +1182,81 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
       // ── DRAWDOWN WATERFALL ──
       const deductions=data.items.filter(i=>i.deduction);
-      const deductionTotal=deductions.reduce((s,i)=>s+i.amount,0);
       const incReceived=t.incReceived||0;
       const startingFigure=incReceived>0?incReceived:t.incTotal;
-      const netIncome=startingFigure-deductionTotal;
       const nonDeductItems=data.items.filter(i=>!i.deduction);
       const nonDeductTotal=nonDeductItems.reduce((s,i)=>s+i.amount,0);
 
       if(deductions.length>0){
+        // Calculate actual deducted vs pending
+        const deductedActual=deductions.reduce((s,d)=>{
+          if(d.status==='paid') return s+d.amount;
+          if(d.status==='partial') return s+(d.paidAmount||0);
+          return s;
+        },0);
+        const deductedPending=deductions.reduce((s,d)=>{
+          if(d.status==='unpaid') return s+d.amount;
+          if(d.status==='partial') return s+(d.amount-(d.paidAmount||0));
+          if(d.status==='maybe') return s+d.amount;
+          return s;
+        },0);
+        const netAfterDeducted=startingFigure-deductedActual;
+        const netAfterAll=startingFigure-deductedActual-deductedPending;
+
         h+=`<div class="card" style="padding:16px;margin-bottom:14px;background:#FAFAF8">
           <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:10px">💫 Income Drawdown</div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
             <span style="font-size:13px;color:var(--green);font-weight:600">${incReceived>0&&t.incExpected>0?'Income Received':'Income'}</span>
             <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--green)">${K(startingFigure)}</span>
           </div>`;
+
         let runningTotal=startingFigure;
         deductions.forEach(d=>{
-          runningTotal-=d.amount;
-          h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:12px;color:var(--red)">− ${esc(d.name)}${d.status==='paid'?' ✓':d.status==='partial'?' ◐':''}</span>
-            <div style="text-align:right">
-              <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--red)">−${K(d.amount)}</div>
-              <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-light)">${K(runningTotal)}</div>
-            </div>
-          </div>`;
+          const actualAmt=d.status==='paid'?d.amount:d.status==='partial'?(d.paidAmount||0):0;
+          const pendingAmt=d.status==='unpaid'?d.amount:d.status==='partial'?(d.amount-(d.paidAmount||0)):d.status==='maybe'?d.amount:0;
+
+          if(actualAmt>0){
+            runningTotal-=actualAmt;
+            h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:12px;color:var(--red)">− ${esc(d.name)} ${d.status==='paid'?'✓':'◐'}</span>
+              <div style="text-align:right">
+                <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--red)">−${K(actualAmt)}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-light)">${K(runningTotal)}</div>
+              </div>
+            </div>`;
+            if(d.status==='partial'&&pendingAmt>0){
+              h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 6px;border-bottom:1px solid var(--border);background:#FEFCE8">
+                <span style="font-size:11px;color:var(--amber);padding-left:16px">↳ ${K(pendingAmt)} pending on ${esc(d.name)}</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--amber)">still owed</span>
+              </div>`;
+            }
+          } else {
+            // Unpaid or maybe — show as pending, not deducted yet
+            h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);opacity:.6">
+              <span style="font-size:12px;color:var(--text-light)">− ${esc(d.name)} ${d.status==='maybe'?'?':'⏳'} <span style="font-size:10px">(not yet deducted)</span></span>
+              <div style="text-align:right">
+                <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-light)">${K(d.amount)}</div>
+              </div>
+            </div>`;
+          }
         });
+
         h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:4px">
-            <span style="font-size:14px;font-weight:700;color:var(--slate)">Net Available</span>
-            <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${netIncome<0?'var(--red)':'var(--green)'}">${K(netIncome)}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--slate)">Available Now</span>
+            <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${netAfterDeducted<0?'var(--red)':'var(--green)'}">${K(netAfterDeducted)}</span>
           </div>`;
+
+        if(deductedPending>0){
+          h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--amber)">
+            <span style="font-size:12px;color:var(--amber);font-weight:600">Pending deductions</span>
+            <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--amber)">−${K(deductedPending)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
+            <span style="font-size:12px;color:var(--text-light)">After pending deductions</span>
+            <span style="font-family:'DM Mono',monospace;font-size:12px;color:${netAfterAll<0?'var(--red)':'var(--text-mid)'}">${K(netAfterAll)}</span>
+          </div>`;
+        }
+
         if(nonDeductTotal>0){
           h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--border)">
             <span style="font-size:12px;color:var(--text-light)">Other expenses (${nonDeductItems.length} items)</span>
@@ -1218,7 +1264,7 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
             <span style="font-size:13px;font-weight:600;color:var(--slate)">After everything</span>
-            <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:${netIncome-nonDeductTotal<0?'var(--red)':'var(--green)'}">${K(netIncome-nonDeductTotal)}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:${netAfterDeducted-nonDeductTotal<0?'var(--red)':'var(--green)'}">${K(netAfterDeducted-nonDeductTotal)}</span>
           </div>`;
         }
         if(t.incExpected>0){
