@@ -691,6 +691,30 @@ function archiveMonth(d){
     archivedAt:new Date().toISOString()
   });
   if(hist.length>12) hist=hist.slice(-12);
+  setHistory(hist);
+}
+
+// History cache to avoid read-after-write issues
+let _historyCache=null;
+
+function getHistory(){
+  if(_historyCache) return _historyCache;
+  try{
+    const h=localStorage.getItem('ba4-history');
+    if(!h) return [];
+    try{
+      const parsed=JSON.parse(h);
+      _historyCache=parsed;
+      return parsed;
+    }catch(e){
+      if(_pin) return [];
+      return [];
+    }
+  }catch(e){return[];}
+}
+
+function setHistory(hist){
+  _historyCache=hist;
   if(_pin){
     secureSet('ba4-history',hist);
   } else {
@@ -698,28 +722,7 @@ function archiveMonth(d){
   }
 }
 
-function getHistory(){
-  try{
-    const h=localStorage.getItem('ba4-history');
-    if(!h) return [];
-    try{ return JSON.parse(h); }catch(e){
-      // Might be encrypted
-      if(_pin){
-        // Can't do async here easily, so return empty — history loads async elsewhere
-        return [];
-      }
-      return [];
-    }
-  }catch(e){return[];}
-}
-
-async function getHistoryAsync(){
-  if(_pin){
-    const h = await secureGet('ba4-history');
-    return h || [];
-  }
-  return getHistory();
-}
+function clearHistoryCache(){_historyCache=null;}
 
 function monthLabel2(m){
   const [y,mo]=m.split('-');
@@ -2494,6 +2497,7 @@ window.reuseBudget=function(month){
 window.clearHistory=function(){
   if(confirm('Delete all archived months? This cannot be undone.')){
     localStorage.removeItem('ba4-history');
+    _historyCache=null;
     render();toast('History cleared');
   }
 };
@@ -2705,11 +2709,7 @@ window.importCSV=function(){
   let hist=getHistory();
   hist.push(record);
   hist.sort((a,b)=>a.month.localeCompare(b.month));
-  if(_pin){
-    secureSet('ba4-history',hist);
-  } else {
-    localStorage.setItem('ba4-history',JSON.stringify(hist));
-  }
+  setHistory(hist);
 
   toast(`${ml} imported — ${items.length} items`);
   track('csv_imported',{items:items.length,month});
