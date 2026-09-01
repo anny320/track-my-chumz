@@ -733,6 +733,10 @@ function getSuffix(d){
 }
 
 function save(){
+  // Rolling backup — keeps last saved state for recovery
+  const current=localStorage.getItem('ba4');
+  if(current) localStorage.setItem('ba4-backup',current);
+
   if(_pin){
     secureSet('ba4', data);
   } else {
@@ -1427,9 +1431,9 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
         h+=`<div class="card" style="padding:14px;margin-bottom:8px;border-left:3px solid ${clr}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-            <div>
-              <div style="font-size:14px;font-weight:600;color:var(--slate)">${esc(s.name)}</div>
-              ${s.description?`<div style="font-size:12px;color:var(--text-light);margin-top:2px">${esc(s.description)}</div>`:''}
+            <div style="flex:1;margin-right:8px">
+              <input type="text" value="${esc(s.name)}" onchange="editIncName('${s.id}',this.value)" style="width:100%;font-size:14px;font-weight:600;color:var(--slate);border:1px solid transparent;background:none;padding:2px 4px;border-radius:4px;outline:none;font-family:inherit" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'"/>
+              <input type="text" value="${esc(s.description||'')}" placeholder="Add description..." onchange="editIncDesc('${s.id}',this.value)" style="width:100%;font-size:12px;color:var(--text-light);border:1px solid transparent;background:none;padding:2px 4px;border-radius:4px;outline:none;font-family:inherit;margin-top:2px" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'"/>
             </div>
             <div style="text-align:right">
               <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--slate)">
@@ -1444,10 +1448,7 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
               <option value="partial" ${s.status==='partial'?'selected':''}>◐ Partial</option>
               <option value="pending" ${s.status==='pending'?'selected':''}>⏳ Pending</option>
             </select>
-            <div style="display:flex;gap:4px">
-              <button onclick="editIncDesc('${s.id}')" style="background:none;border:none;font-size:13px;cursor:pointer;padding:4px" title="Edit description">📝</button>
-              <button onclick="delInc('${s.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px">✕</button>
-            </div>
+            <button onclick="delInc('${s.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px">✕</button>
           </div>
 
           ${isPartial?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
@@ -1798,10 +1799,45 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
   // ── HISTORY ──
   if(view==='history'){
-    h+=`<div class="sec-title">Budget History</div><div class="sec-sub">Past months are archived automatically. Scroll down for your year-in-review.</div>`;
+    h+=`<div class="sec-title">Budget History</div><div class="sec-sub">Past months are archived automatically when a new month begins. You can also snapshot the current month manually.</div>`;
+
+    // Manual archive button
+    if(data.items.length>0){
+      h+=`<div class="card" style="padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;border:1px dashed var(--blue)">
+        <div style="font-size:24px">📸</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--slate)">Snapshot ${monthLabel}</div>
+          <div style="font-size:12px;color:var(--text-light)">Save a copy of this month's budget to history. Your current data stays as-is.</div>
+        </div>
+        <button class="btn primary sm" style="white-space:nowrap" onclick="manualArchive()">Save</button>
+      </div>`;
+    }
+
+    // Import from CSV export
+    h+=`<div class="card" style="padding:14px;margin-bottom:16px;border:1px dashed var(--amber)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:20px">📥</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--slate)">Import from previous export</div>
+          <div style="font-size:12px;color:var(--text-light)">Paste a CSV or clipboard export to recover a past month's data into history.</div>
+        </div>
+      </div>
+      <div id="import-area" style="display:none">
+        <div class="fg"><label class="fl">Which month is this from?</label>
+          <input class="inp" type="month" id="import-month" value="${curMonth}"/>
+        </div>
+        <div class="fg"><label class="fl">Paste your exported data</label>
+          <textarea class="inp" id="import-csv" rows="8" placeholder="Paste your CSV or clipboard export here...&#10;&#10;The format should match what Track my Chumz exports — with INCOME, EXPENSES, and SUMMARY sections."></textarea>
+        </div>
+        <div id="import-preview"></div>
+        <button class="btn primary" onclick="importCSV()">Import to History</button>
+        <button class="btn outline" style="margin-top:6px" onclick="$('#import-area').style.display='none'">Cancel</button>
+      </div>
+      <button class="btn outline sm" id="import-toggle-btn" onclick="$('#import-area').style.display='block';this.style.display='none'">Paste Export Data</button>
+    </div>`;
 
     if(hist.length===0){
-      h+=`<div class="empty">No history yet. When the month rolls over, your current budget will be archived here automatically.</div>`;
+      h+=`<div class="empty">No history yet.${data.items.length>0?' Tap the snapshot button above to save this month\'s data.':' Enter a budget first, then come back to archive it.'}</div>`;
     } else {
 
       // ════════════════════════════════════
@@ -2079,6 +2115,13 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
 
     h+=`<div class="card" style="padding:16px;margin-top:16px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">🔐 Security</div>`;
+
+    // Data recovery
+    h+=`<div class="card" style="padding:16px;margin-top:12px;margin-bottom:12px;border:1px dashed var(--amber)">
+      <div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">🔄 Data Recovery</div>
+      <div style="font-size:12px;color:var(--text-mid);margin-bottom:10px">A backup of your previous save is kept automatically. If something went wrong, you can restore it.</div>
+      <button class="btn outline sm" onclick="restoreBackup()">Restore Last Backup</button>
+    </div>`;
     if(hasPinSet()){
       h+=`<div style="font-size:13px;color:var(--text-mid);margin-bottom:10px">Your data is <strong>PIN-protected and AES-256 encrypted</strong>. Even if someone accesses your browser storage, they can't read your budget data without the PIN.</div>
       <button class="btn outline sm" onclick="showLockScreen('change-verify')">Change PIN</button>
@@ -2368,11 +2411,18 @@ window.setIncRcvd=function(id,val){
   save();render();
 };
 
-window.editIncDesc=function(id){
+window.editIncDesc=function(id,val){
   const s=data.incomeSources.find(x=>x.id===id);
   if(!s)return;
-  const desc=prompt('Description:',s.description||'');
-  if(desc!==null){s.description=desc;save();render();}
+  s.description=val||'';
+  save();
+};
+
+window.editIncName=function(id,val){
+  const s=data.incomeSources.find(x=>x.id===id);
+  if(!s)return;
+  s.name=val.trim()||s.name;
+  save();
 };
 
 // Investments
@@ -2444,6 +2494,186 @@ window.clearHistory=function(){
     localStorage.removeItem('ba4-history');
     render();toast('History cleared');
   }
+};
+
+window.manualArchive=function(){
+  if(data.items.length===0){toast('No budget data to archive');return;}
+  const hist=getHistory();
+  const already=hist.find(h=>h.month===data.month);
+  if(already){
+    if(!confirm(`${monthLabel} is already in history. Save another snapshot? This will add a duplicate.`)) return;
+  }
+  archiveMonth(data);
+  toast(`${monthLabel} saved to history`);
+  track('manual_archive');
+  render();
+};
+
+window.restoreBackup=function(){
+  const backup=localStorage.getItem('ba4-backup');
+  if(!backup){toast('No backup found');return;}
+  try{
+    const parsed=JSON.parse(backup);
+    const itemCount=parsed.items?parsed.items.length:0;
+    const month=parsed.month||'unknown';
+    if(!confirm(`Found backup from ${month} with ${itemCount} items. Restore it? Your current data will be replaced.`)) return;
+    localStorage.setItem('ba4',backup);
+    data=parsed;
+    if(!data.incomeSources) data.incomeSources=[];
+    if(!data.investments) data.investments=[];
+    if(!data.history) data.history=[];
+    save();
+    toast(`Restored backup from ${month}`);
+    view='overview';
+    render();
+  }catch(e){
+    toast('Backup is corrupted or encrypted — cannot restore');
+  }
+};
+
+window.importCSV=function(){
+  const raw=$('#import-csv').value.trim();
+  const month=$('#import-month').value;
+  if(!raw){toast('Paste your export data first');return;}
+  if(!month){toast('Select which month this is from');return;}
+
+  // Parse CSV or TSV
+  const sep=raw.includes('\t')?'\t':',';
+  const lines=raw.split('\n').map(l=>l.trim()).filter(l=>l);
+
+  let section='';
+  let income=0;
+  let incomeSources=[];
+  let items=[];
+  let investments=[];
+  let totalExpenses=0;
+  let totalPaid=0;
+
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    const upper=line.toUpperCase();
+
+    // Detect sections
+    if(upper.startsWith('INCOME')){section='income';continue;}
+    if(upper.startsWith('EXPENSE')){section='expenses';continue;}
+    if(upper.startsWith('SUMMARY')){section='summary';continue;}
+    if(upper.startsWith('INVESTMENT')){section='investments';continue;}
+
+    // Skip headers
+    if(upper.includes('SOURCE,')&&section==='income') continue;
+    if(upper.includes('SOURCE\T')&&section==='income') continue;
+    if(upper.includes('ITEM,')&&section==='expenses') continue;
+    if(upper.includes('ITEM\T')&&section==='expenses') continue;
+    if(upper.includes('NAME,')&&section==='investments') continue;
+    if(upper.includes('NAME\T')&&section==='investments') continue;
+    if(upper.startsWith('TRACK MY')) continue;
+
+    // Parse fields - handle quoted CSV
+    let fields;
+    if(sep===','){
+      fields=[];
+      let current='';
+      let inQuote=false;
+      for(let c=0;c<line.length;c++){
+        if(line[c]==='"'){inQuote=!inQuote;continue;}
+        if(line[c]===','&&!inQuote){fields.push(current.trim());current='';continue;}
+        current+=line[c];
+      }
+      fields.push(current.trim());
+    } else {
+      fields=line.split('\t').map(f=>f.trim());
+    }
+
+    if(fields.length<2) continue;
+
+    const name=fields[0].replace(/^["']|["']$/g,'');
+    const amt=Number(String(fields[1]).replace(/[^0-9.-]/g,''))||0;
+
+    if(!name||upper.startsWith('TOTAL')||!amt) {
+      // Check summary lines
+      if(section==='summary'){
+        if(upper.includes('INCOME')) income=income||amt;
+        if(upper.includes('PAID')) totalPaid=amt;
+        if(upper.includes('EXPENSE')) totalExpenses=amt;
+      }
+      if(upper.startsWith('TOTAL INCOME')) income=amt;
+      continue;
+    }
+
+    if(section==='income'){
+      const status=fields[2]||'received';
+      const rcvd=Number(String(fields[3]).replace(/[^0-9.-]/g,''))||0;
+      const desc=fields[5]||'';
+      incomeSources.push({name,description:desc,amount:amt,status:status.toLowerCase(),receivedAmount:rcvd||amt});
+      income+=amt;
+    }
+
+    if(section==='expenses'){
+      const status=fields[2]||'unpaid';
+      const paidAmt=Number(String(fields[3]).replace(/[^0-9.-]/g,''))||0;
+      items.push({name,amount:amt,status:status.toLowerCase(),paidAmount:paidAmt||null});
+    }
+
+    if(section==='investments'){
+      const type=fields[2]||'other';
+      const date=fields[3]||'';
+      const note=fields[4]||'';
+      investments.push({name,amount:amt,type,date,note});
+    }
+  }
+
+  if(items.length===0&&incomeSources.length===0){
+    toast('Could not parse any items — check the format');
+    return;
+  }
+
+  // If no income from sources, try summary
+  if(incomeSources.length===0&&income===0){
+    // Try to find income from flat text
+    lines.forEach(l=>{
+      const m=l.match(/income[,\t]\s*(\d[\d,]*)/i);
+      if(m) income=Number(m[1].replace(/,/g,''))||0;
+    });
+  }
+  if(incomeSources.length>0) income=incomeSources.reduce((s,i)=>s+i.amount,0);
+  if(!totalExpenses) totalExpenses=items.reduce((s,i)=>s+i.amount,0);
+  if(!totalPaid) totalPaid=items.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0)
+    +items.filter(i=>i.status==='partial').reduce((s,i)=>s+(i.paidAmount||0),0);
+
+  const record={
+    month:month,
+    income:income,
+    incomeReceived:incomeSources.filter(s=>s.status==='received').reduce((s,i)=>s+i.amount,0),
+    incomePending:incomeSources.filter(s=>s.status==='pending').reduce((s,i)=>s+i.amount,0),
+    balance:null,
+    totalExpenses:totalExpenses,
+    totalPaid:totalPaid,
+    remaining:income-totalExpenses,
+    itemCount:items.length,
+    items:items.map(i=>({name:i.name,amount:i.amount,status:i.status,paidAmount:i.paidAmount})),
+    incomeSources:incomeSources,
+    investments:investments,
+    totalInvested:investments.reduce((s,i)=>s+i.amount,0),
+    archivedAt:new Date().toISOString(),
+    importedFrom:'csv'
+  };
+
+  // Show preview
+  const ml=monthLabel2(month);
+  if(!confirm(`Import ${ml}?\n\n• ${items.length} expenses totaling ${K(totalExpenses)}\n• ${incomeSources.length} income sources totaling ${K(income)}\n• ${investments.length} investments\n• Remaining: ${K(income-totalExpenses)}\n\nAdd to history?`)) return;
+
+  let hist=getHistory();
+  hist.push(record);
+  hist.sort((a,b)=>a.month.localeCompare(b.month));
+  if(_pin){
+    secureSet('ba4-history',hist);
+  } else {
+    localStorage.setItem('ba4-history',JSON.stringify(hist));
+  }
+
+  toast(`${ml} imported — ${items.length} items`);
+  track('csv_imported',{items:items.length,month});
+  render();
 };
 
 window.saveSettings=function(){
