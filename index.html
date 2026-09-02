@@ -1132,8 +1132,9 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       h+=`<div class="empty">No budget data yet.<br/><button class="btn primary sm" style="margin-top:12px" onclick="go('input')">✏️ Enter Budget</button></div>`;
     } else {
       const invTotal=(data.investments||[]).reduce((s,i)=>s+i.amount,0);
+      const cashAtHand=(t.incReceived||0)-t.paid-invTotal;
       h+=`<div class="a-grid">
-        <div class="a-card ${t.remaining<0?'danger':t.remaining<(t.incTotal)*.1&&t.incTotal>0?'caution':'good'}"><div class="a-num">${K(t.remaining)}</div><div class="a-label">Remaining</div></div>
+        <div class="a-card ${cashAtHand<0?'danger':cashAtHand<5000?'caution':'good'}"><div class="a-num">${K(cashAtHand)}</div><div class="a-label">Cash at Hand</div></div>
         <div class="a-card"><div class="a-num">${K(t.paid)}</div><div class="a-label">Paid Out</div></div>
         <div class="a-card ${t.stillDue>0?'danger':'good'}"><div class="a-num">${K(t.stillDue)}</div><div class="a-label">Still Due</div></div>
         <div class="a-card ${invTotal>0?'good':''}"><div class="a-num">${K(invTotal)}</div><div class="a-label">Invested</div></div>
