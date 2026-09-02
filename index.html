@@ -1136,7 +1136,7 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       h+=`<div class="a-grid">
         <div class="a-card ${cashAtHand<0?'danger':cashAtHand<5000?'caution':'good'}"><div class="a-num">${K(cashAtHand)}</div><div class="a-label">Cash at Hand</div></div>
         <div class="a-card"><div class="a-num">${K(t.paid)}</div><div class="a-label">Paid Out</div></div>
-        <div class="a-card ${t.stillDue>0?'danger':'good'}"><div class="a-num">${K(t.stillDue)}</div><div class="a-label">Still Due</div></div>
+        <div class="a-card ${t.stillDue>0?'danger':'good'}"><div class="a-num">${K(t.stillDue)}</div><div class="a-label">Unpaid Bills</div></div>
         <div class="a-card ${invTotal>0?'good':''}"><div class="a-num">${K(invTotal)}</div><div class="a-label">Invested</div></div>
       </div>`;
 
@@ -1436,8 +1436,8 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
         h+=`<div class="card" style="padding:14px;margin-bottom:8px;border-left:3px solid ${clr}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
             <div style="flex:1;margin-right:8px">
-              <input type="text" value="${esc(s.name)}" oninput="editIncName('${s.id}',this.value)" style="width:100%;font-size:14px;font-weight:600;color:var(--slate);border:1px solid transparent;background:none;padding:2px 4px;border-radius:4px;outline:none;font-family:inherit" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none';toast('Saved')"/>
-              <input type="text" value="${esc(s.description||'')}" placeholder="Add description..." oninput="editIncDesc('${s.id}',this.value)" style="width:100%;font-size:12px;color:var(--text-light);border:1px solid transparent;background:none;padding:2px 4px;border-radius:4px;outline:none;font-family:inherit;margin-top:2px" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none';toast('Saved')"/>
+              <input type="text" value="${esc(s.name)}" onchange="editIncField('${s.id}','name',this.value)" style="width:100%;font-size:14px;font-weight:600;color:var(--slate);border:1px solid transparent;background:none;padding:4px 6px;border-radius:4px;outline:none;font-family:inherit" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'"/>
+              <input type="text" value="${esc(s.description||'')}" placeholder="Add description..." onchange="editIncField('${s.id}','description',this.value)" style="width:100%;font-size:12px;color:var(--text-light);border:1px solid transparent;background:none;padding:4px 6px;border-radius:4px;outline:none;font-family:inherit;margin-top:2px" onfocus="this.style.borderColor='var(--blue)';this.style.background='#fff'" onblur="this.style.borderColor='transparent';this.style.background='none'"/>
             </div>
             <div style="text-align:right">
               <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--slate)">
@@ -2417,19 +2417,18 @@ window.setIncRcvd=function(id,val){
   save();render();
 };
 
-window.editIncDesc=function(id,val){
+window.editIncField=function(id,field,val){
   const s=data.incomeSources.find(x=>x.id===id);
-  if(!s)return;
-  s.description=val||'';
+  if(!s) return;
+  if(field==='name') s.name=val.trim()||s.name;
+  if(field==='description') s.description=val;
   save();
+  toast('Saved');
 };
 
-window.editIncName=function(id,val){
-  const s=data.incomeSources.find(x=>x.id===id);
-  if(!s)return;
-  s.name=val.trim()||s.name;
-  save();
-};
+// Keep old function names for backward compat
+window.editIncDesc=function(id,val){editIncField(id,'description',val);};
+window.editIncName=function(id,val){editIncField(id,'name',val);};
 
 // Investments
 window.addInv=function(){
