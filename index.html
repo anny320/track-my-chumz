@@ -620,16 +620,13 @@ function load(){
   try{
     const raw=localStorage.getItem('ba4');
     if(raw){
-      try{ data=JSON.parse(raw); }catch(e){ data=null; } // might be encrypted
+      try{ data=JSON.parse(raw); }catch(e){ data=null; }
       if(data && data.month && data.month!==curMonth){
+        // New month detected — archive but DON'T reset yet
         archiveMonth(data);
-        data.month = curMonth;
-        data.balance = null;
-        data.rawInput = '';
-        data.items.forEach(i=>{ i.status='unpaid'; i.id=uid(); });
-        save();
+        // Keep the old data intact, just flag the rollover
         showRollover = true;
-        view = 'input';
+        view = 'overview'; // show them their last month's data first
       } else if(data) {
         if(data.items&&data.items.length>0) view='overview';
       }
@@ -640,18 +637,12 @@ function load(){
 }
 
 async function loadEncrypted(){
-  // Load with decryption
   try{
     data = await secureGet('ba4');
     if(data && data.month && data.month!==curMonth){
       archiveMonth(data);
-      data.month = curMonth;
-      data.balance = null;
-      data.rawInput = '';
-      data.items.forEach(i=>{ i.status='unpaid'; i.id=uid(); });
-      await secureSet('ba4', data);
       showRollover = true;
-      view = 'input';
+      view = 'overview';
     } else if(data) {
       if(data.items&&data.items.length>0) view='overview';
     }
@@ -766,11 +757,12 @@ function totals(){
   const incTotal=incInHand+incPendingTotal;
   // Use sources total if sources exist, otherwise fall back to flat income
   const effectiveIncome=srcs.length>0?incTotal:data.income;
+  const effectiveReceived=srcs.length>0?incInHand:data.income;
   return {all,paid,unpaid,maybe,partialOwed,
     remaining:effectiveIncome-all,
     stillDue:unpaid+maybe+partialOwed,
     actuallyOwed:unpaid+partialOwed,
-    incReceived:incInHand,incExpected:incPendingTotal,incTotal:effectiveIncome};
+    incReceived:effectiveReceived,incExpected:srcs.length>0?incPendingTotal:0,incTotal:effectiveIncome};
 }
 
 
@@ -1061,11 +1053,16 @@ function render(){
   // ── INPUT ──
   if(view==='input'){
     if(showRollover){
-      h+=`<div class="insight info"><div class="i-title">📅 New month — ${monthLabel}</div><div class="i-body">Last month's budget has been archived to History. Your items have been carried forward with statuses reset to unpaid.<br/><br/>You can:<br/>• <strong>Re-paste</strong> a fresh budget below (replaces everything)<br/>• <strong>Keep the carried-forward items</strong> and adjust in Overview<br/>• <strong>Start blank</strong> if this month is different</div></div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-        <button class="btn outline sm" onclick="go('overview')">📊 Use carried-forward items</button>
-        <button class="btn outline sm" onclick="clearForNew()">🗑 Start blank</button>
-        <button class="btn outline sm" onclick="go('history')">📁 View last month</button>
+      const prevMonth=data.month?monthLabel2(data.month):'last month';
+      h+=`<div class="card" style="padding:20px;margin-bottom:16px;border:2px solid var(--blue);background:#EFF6FF">
+        <div style="font-size:16px;font-weight:700;color:var(--slate);margin-bottom:6px">📅 Welcome to ${monthLabel}</div>
+        <div style="font-size:13px;color:var(--text-mid);margin-bottom:4px">${prevMonth}'s budget has been archived to History.</div>
+        <div style="font-size:13px;color:var(--text-mid);margin-bottom:14px">Below is your ${prevMonth} data — still intact. Choose what to do:</div>
+
+        <button class="btn primary" style="margin-bottom:8px" onclick="rolloverKeep()">♻️ Carry forward to ${monthLabel} — reset all to unpaid</button>
+        <button class="btn outline" style="margin-bottom:8px" onclick="go('input');showRollover=false">✏️ Paste a fresh budget for ${monthLabel}</button>
+        <button class="btn outline" style="margin-bottom:8px" onclick="clearForNew()">🗑 Start completely blank</button>
+        <button class="btn outline" onclick="dismissRollover()">👀 Keep viewing ${prevMonth}'s data for now</button>
       </div>`;
     }
     h+=`<div class="sec-title">Paste or type your budget</div>
@@ -2474,8 +2471,28 @@ window.resetAll=function(){
 
 window.clearForNew=function(){
   data.items=[];data.rawInput='';data.balance=null;
-  showRollover=false;save();render();
+  data.incomeSources=[];data.investments=[];
+  data.month=curMonth;
+  showRollover=false;save();view='input';render();
   toast('Cleared — start fresh');
+};
+
+window.rolloverKeep=function(){
+  data.month=curMonth;
+  data.balance=null;
+  data.rawInput='';
+  data.items.forEach(i=>{i.status='unpaid';i.paidAmount=0;i.id=uid();i.deduction=i.deduction||false;});
+  (data.incomeSources||[]).forEach(s=>{s.status='pending';s.receivedAmount=0;s.id=uid();});
+  data.investments=[];
+  showRollover=false;
+  save();
+  toast(`Carried forward to ${monthLabel}`);
+  render();
+};
+
+window.dismissRollover=function(){
+  showRollover=false;
+  render();
 };
 
 window.reuseBudget=function(month){
