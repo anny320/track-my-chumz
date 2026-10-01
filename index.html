@@ -1036,7 +1036,13 @@ function render(){
   const received=t?(t.incReceived||0):0;
   const pending=t?(t.incExpected||0):0;
   const invTotal2=(data.investments||[]).reduce((s,i)=>s+i.amount,0);
-  const cashNow=received-t.paid-invTotal2;
+  // Only starred expenses draw down cash
+  const hdrPaidStarred=t?data.items.filter(i=>i.deduction).reduce((s,i)=>{
+    if(i.status==='paid') return s+i.amount;
+    if(i.status==='partial') return s+(i.paidAmount||0);
+    return s;
+  },0):0;
+  const cashNow=received-hdrPaidStarred-invTotal2;
   if(t&&(received>0||pending>0||data.income>0)){
     h+=`<div class="hdr-stats">
       <div><span class="lb">Received </span><span class="vl" style="color:#4ADE80">${K(received)}</span></div>
@@ -1136,7 +1142,13 @@ Netflix - 1500 paid">${data.rawInput||''}</textarea>
       h+=`<div class="empty">No budget data yet.<br/><button class="btn primary sm" style="margin-top:12px" onclick="go('input')">✏️ Enter Budget</button></div>`;
     } else {
       const invTotal=(data.investments||[]).reduce((s,i)=>s+i.amount,0);
-      const cashAtHand=(t.incReceived||0)-t.paid-invTotal;
+      // Only starred items draw down cash at hand
+      const paidStarred=data.items.filter(i=>i.deduction).reduce((s,i)=>{
+        if(i.status==='paid') return s+i.amount;
+        if(i.status==='partial') return s+(i.paidAmount||0);
+        return s;
+      },0);
+      const cashAtHand=(t.incReceived||0)-paidStarred-invTotal;
       h+=`<div class="a-grid">
         <div class="a-card ${cashAtHand<0?'danger':cashAtHand<5000?'caution':'good'}"><div class="a-num">${K(cashAtHand)}</div><div class="a-label">Cash at Hand</div></div>
         <div class="a-card"><div class="a-num">${K(t.paid)}</div><div class="a-label">Paid Out</div></div>
