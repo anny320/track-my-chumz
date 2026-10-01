@@ -1033,15 +1033,22 @@ function render(){
     <div class="hdr-row"><div class="hdr-tag">Track my Chumz 💰</div><div style="font-size:11px;color:#9CA3AF">Day ${dayNum}/${daysIn}</div></div>
     <div class="hdr-month">${getGreeting()}</div>
     <div style="font-size:13px;color:#9CA3AF;margin-top:2px">${monthLabel}${profile.payday?' · Payday: '+profile.payday+getSuffix(profile.payday):''}</div>`;
-  const effectiveIncome=t?t.incTotal:data.income;
-  if(t&&effectiveIncome>0){
+  const received=t?(t.incReceived||0):0;
+  const pending=t?(t.incExpected||0):0;
+  const invTotal2=(data.investments||[]).reduce((s,i)=>s+i.amount,0);
+  const cashNow=received-t.paid-invTotal2;
+  if(t&&(received>0||pending>0||data.income>0)){
     h+=`<div class="hdr-stats">
-      <div><span class="lb">Income</span> <span class="vl">${K(effectiveIncome)}</span></div>
-      <div><span class="lb">Expenses</span> <span class="vl ${t.all>effectiveIncome?'neg':'pos'}">${K(t.all)}</span></div>
-      <div><span class="lb">Left</span> <span class="vl ${t.remaining<0?'neg':'pos'}">${K(t.remaining)}</span></div>
+      <div><span class="lb">Received </span><span class="vl" style="color:#4ADE80">${K(received)}</span></div>
+      ${pending>0?`<div><span class="lb">Pending </span><span class="vl" style="color:#60A5FA">${K(pending)}</span></div>`:''}
+      <div><span class="lb">Paid Out </span><span class="vl">${K(t.paid)}</span></div>
     </div>
-    <div class="prog-track"><div class="prog-fill" style="width:${pct(t.all,effectiveIncome)}%;background:${t.all>effectiveIncome?'#EF4444':t.all>effectiveIncome*.85?'#F5A623':'#4ADE80'}"></div></div>
-    <div class="prog-sub">${Math.round(pct(t.all,effectiveIncome))}% of income committed · ${daysLeft} days left</div>`;
+    <div class="hdr-stats" style="margin-top:6px">
+      <div><span class="lb">Cash at Hand </span><span class="vl ${cashNow<0?'neg':'pos'}">${K(cashNow)}</span></div>
+      <div><span class="lb">Unpaid Bills </span><span class="vl ${t.stillDue>0?'neg':''}">${K(t.stillDue)}</span></div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" style="width:${received>0?pct(t.paid,received):0}%;background:${t.paid>received?'#EF4444':t.paid>received*.85?'#F5A623':'#4ADE80'}"></div></div>
+    <div class="prog-sub">${received>0?Math.round(pct(t.paid,received)):0}% of received income spent · ${daysLeft} days left</div>`;
   }
   h+=`</div>`;
 
